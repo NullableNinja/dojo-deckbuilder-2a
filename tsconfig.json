@@ -18,5 +18,5 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src", "app/companion-app.tsx"]
+  "include": ["src", "app/**/*.ts", "app/**/*.tsx"]
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "dojo-deckbuilder-companion-v3";
+const CACHE_NAME = "dojo-deckbuilder-companion-v4";
 const CACHE_PREFIX = "dojo-deckbuilder-companion-";
 const scopeUrl = new URL(self.registration.scope);
 const scoped = (path) => new URL(path, scopeUrl).toString();

@@ -576,8 +576,8 @@ body:has(.universal-card-inspector-backdrop) {
   .card-inspector-nav > button { min-height: 44px; gap: 5px; padding-inline: 5px; }
   .card-inspector-nav > button > span:first-child,
   .card-inspector-nav > button > span:last-child { font-size: 18px; }
-  .card-inspector-nav > span { padding: 6px; font-size: 7px; }
-  .card-inspector-close { position: fixed; top: 9px; right: 8px; z-index: 10; width: 40px; height: 40px; }
+  .card-inspector-nav > span { padding: 6px; font-size: 9px; }
+  .card-inspector-close { position: fixed; top: 9px; right: 8px; z-index: 10; width: 44px; height: 44px; }
   .card-inspector-layout { height: auto; display: block; }
   .card-inspector-card-stage {
     min-height: 0;

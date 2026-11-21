@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type SetStateAction } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type SetStateAction } from "react";
 import cardPlaceholderUrl from "./assets/art/card-placeholder-v2.webp";
 import starterJabArtUrl from "./assets/starter/starter-jab-art-v2.webp";
 import highGuardArtUrl from "./assets/starter/high-guard-art-v2.webp";
@@ -36,10 +36,14 @@ import type { PlaytestCombatExchange } from "../src/playtest-events";
 import { fetchRulesManifest, rulesSyncState, type RulesSyncState } from "./rules-client";
 import { normalizePendingDamageChoice } from "./playtest-state-recovery";
 import { QUICK_DUEL_HOUSE_RULES, effectiveBeltThresholds, hasQuickDuelHouseRule, sanitizeQuickDuelHouseRuleIds, shouldRefreshMarketAtRoundEnd } from "./playtest-house-rules";
-import { QUICK_DUEL_TRAINING_STRIPE_HEAL_REQUEST_EVENT, spendQuickDuelTrainingStripeForHealing } from "./quick-duel-training-stripes.ts";
+import { QUICK_DUEL_TRAINING_STRIPE_HEAL_REQUEST_EVENT, quickDuelTrainingStripeHealingAvailability, spendQuickDuelTrainingStripeForHealing } from "./quick-duel-training-stripes.ts";
 import { markQuickDuelBeltCheckAction, quickDuelBeltCheckActionAvailability } from "./quick-duel-belt-check-actions.ts";
+import { canonicalTrainingStripeBelts, canonicalTrainingStripeConfig } from "./training-stripes-config.ts";
+import { trainingStripeState } from "./training-stripes.ts";
 import { resolveLocationHostEvent, structuredLocationDefenseForHost, structuredLocationKataFocusForHost } from "./location-playtest-bridge.ts";
 import { createBossRuntimeState, resolveBossCardEvent } from "./boss-runtime.ts";
+import { GAME_MODES as CANONICAL_GAME_MODES } from "./canonical-presentation";
+import { readUserPreferences } from "./user-preferences";
 
 /**
  * QUICK DUEL REACT SHELL
@@ -296,6 +300,9 @@ type Difficulty = "student" | "certified" | "master";
 type MotionMode = "full" | "reduced" | "off";
 type HouseSettings = { tempo: boolean; locations: boolean; openMarket: boolean; guided: boolean; autoAi: boolean; balancedMarket: boolean; difficulty: Difficulty; motion: MotionMode; houseRuleIds: string[] };
 type DeskView = "market" | "combo" | "belt";
+type GameModeId = (typeof CANONICAL_GAME_MODES)[number]["id"];
+type MatVfxKind = "attack" | "hit" | "block" | "combo" | "ko" | "brace" | "certified" | "promotion";
+type MatVfxEvent = { id: number; player?: MatVfxKind; ai?: MatVfxKind; screen?: "impact" | "scene"; cue: string; cueTone: "attack" | "damage" | "block" | "certified" | "promotion" | "summary"; announcement: string; xp?: { side: "player" | "ai"; amount: number }; promotion?: { side: "player" | "ai"; belt: string; previousBelt: string } };
 
 const BINDER_STORAGE_KEY = "dojo-binder-v1";
 
@@ -358,6 +365,12 @@ const DIFFICULTIES: Record<Difficulty, { label: string; eyebrow: string; detail:
   student: { label: "Student", eyebrow: "Learn the mat", detail: "A shorter duel with a less ruthless opponent.", aiHp: 20, statBoost: 0 },
   certified: { label: "Certified", eyebrow: "Core test", detail: "The intended Quick Duel pressure with the complete hand economy.", aiHp: 25, statBoost: 0 },
   master: { label: "Grandmaster", eyebrow: "Bad decision", detail: "More HP, sharper stats, and no sympathy from the clipboard.", aiHp: 35, statBoost: 1 },
+};
+const GAME_MODE_META: Record<GameModeId, { status: string; tone: "action" | "blue" | "brass" | "violet"; hook: string; live: boolean }> = {
+  "tag-team": { status: "Recommended", tone: "brass", hook: "Trade places, share the paperwork, and discover that teamwork is mostly a louder kind of arguing.", live: false },
+  "standard-clash": { status: "Rules filed", tone: "blue", hook: "The classic Paper-Fu appointment: two fighters, three zones, and no excuse for losing the receipt.", live: false },
+  "quick-duel": { status: "Playable now", tone: "action", hook: "A brisk complete fight for proving the deck, the stance, and the exact volume of your HIYAH.", live: true },
+  "boss-blitz": { status: "Boss room pending", tone: "violet", hook: "One oversized problem. A team of certified nuisances. The filing cabinet has requested backup.", live: false },
 };
 
 const cardArtModules = import.meta.glob<string>("./assets/cards/{attacks,defenses,katas,consumables,defense-equipment,gear,combos,characters,starters,locations}/*.webp", { eager: true, query: "?url", import: "default" });
@@ -2661,7 +2674,7 @@ function NativeCardArt({ card }: { card: CardEntry }) {
   </span>;
 }
 
-function PlayCard({ card, selected, disabled, onClick, onInspect }: { card: CardEntry; selected?: boolean; disabled?: boolean; onClick?: () => void; onInspect: () => void }) {
+function PlayCard({ card, selected, disabled, onClick, onInspect, handIndex, handTotal }: { card: CardEntry; selected?: boolean; disabled?: boolean; onClick?: () => void; onInspect: () => void; handIndex?: number; handTotal?: number }) {
   const art = artistUrl(card);
   const kind = isAttack(card) ? "attack" : isDefense(card) ? "defense" : isKata(card) ? "kata" : card.cardType.toLocaleLowerCase();
   const canDrag = !disabled && Boolean(onClick);
@@ -2674,7 +2687,8 @@ function PlayCard({ card, selected, disabled, onClick, onInspect }: { card: Card
     event.dataTransfer.setData("application/x-dojo-card", card.id);
     event.dataTransfer.setData("text/plain", card.id);
   };
-  return <article className={`play-card play-card--${kind} ${selected ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`} draggable={canDrag} onDragStart={beginDrag} data-card-id={card.id}>
+  const handStyle = handIndex === undefined ? undefined : { "--hand-index": handIndex, "--hand-total": handTotal ?? 1, "--hand-angle": `${(handIndex - ((handTotal ?? 1) - 1) / 2) * 5}deg` } as CSSProperties;
+  return <article className={`play-card play-card--${kind} ${selected ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`} style={handStyle} draggable={canDrag} onDragStart={beginDrag} data-card-id={card.id}>
     <button className="play-card-main" disabled={disabled || !onClick} onClick={onClick} aria-label={`Use ${card.name}`}>
       <span className="play-card-art-window">{art ? <img src={art} alt="" loading="lazy" decoding="async" /> : <NativeCardArt card={card} />}</span>
       <span className="play-card-kind">{card.subtype || card.cardType}</span>
@@ -2699,6 +2713,13 @@ function StatGlyph({ stat }: { stat: "HP" | "XP" | "FP" | "ATK" | "DEF" | "SPD" 
 
 const LOADOUT_SLOTS = ["Head", "Chest", "Arms", "Legs", "Feet", "Accessory", "Hands"] as const;
 
+type HealthTier = "healthy" | "warning" | "critical";
+
+function healthTier(hp: number, maxHp: number): HealthTier {
+  const ratio = maxHp > 0 ? hp / maxHp : 0;
+  return ratio <= .34 ? "critical" : ratio <= .66 ? "warning" : "healthy";
+}
+
 function equipmentSlotLabel(card: CardEntry) {
   const raw = String(card.details?.Slot ?? "").trim();
   if (/hand/i.test(raw) || isWeapon(card)) return "Hands";
@@ -2713,9 +2734,21 @@ function equipmentSlotLabel(card: CardEntry) {
 }
 
 function FighterEquipmentTabs({ board, enemy, onInspect }: { board: Board; enemy?: boolean; onInspect: (card: CardEntry) => void }) {
+  const [open, setOpen] = useState(false);
+  const [pulse, setPulse] = useState(false);
+  const pulseTimer = useRef<number | null>(null);
   const equipment = board.equipment.map(cardFor).filter((card): card is CardEntry => Boolean(card));
-  return <section className={`fighter-equipment-tabs ${enemy ? "is-enemy" : ""}`} aria-label={`${enemy ? "Opponent" : "Your"} attached Equipment`}>
-    <button type="button" className="fighter-loadout-launch" onClick={() => onInspect(cardFor(board.fighterId)!)}><span>Loadout</span><b>{equipment.length}</b><small>{(board.exhaustedEquipment ?? []).length} exhausted</small></button>
+  useEffect(() => () => { if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current); }, []);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    setPulse(true);
+    if (pulseTimer.current !== null) window.clearTimeout(pulseTimer.current);
+    pulseTimer.current = window.setTimeout(() => setPulse(false), 620);
+  };
+  const feedback = `${open ? "LOADOUT OPEN" : "LOADOUT FILED"} · ${equipment.length} record${equipment.length === 1 ? "" : "s"}`;
+  return <section className={`fighter-equipment-tabs ${enemy ? "is-enemy" : ""}${open ? " is-open" : ""}${pulse ? " is-pulsing" : ""}`} data-feedback={feedback} aria-label={`${enemy ? "Opponent" : "Your"} attached Equipment`}>
+    <button type="button" className="fighter-loadout-launch" onClick={toggle} aria-expanded={open}><span>Loadout</span><b>{equipment.length}</b><small>{open ? "Close docket" : "Open docket"}</small></button>
     <div>{equipment.slice(0, 6).map((item, index) => {
       const exhausted = isEquipmentExhausted(board, item.id);
       return <button type="button" className={`fighter-equipment-tab ${exhausted ? "is-exhausted" : "is-ready"}`} onClick={() => onInspect(item)} title={`${item.name} · ${exhausted ? "Exhausted" : "Ready"}`} key={`${item.id}-${index}`}>
@@ -2725,7 +2758,10 @@ function FighterEquipmentTabs({ board, enemy, onInspect }: { board: Board; enemy
   </section>;
 }
 
-function FighterPanel({ board, label, enemy, onInspect, onOpenCombo, beltThresholds }: { board: Board; label: string; enemy?: boolean; onInspect: (card: CardEntry) => void; onOpenCombo?: () => void; beltThresholds: number[] }) {
+function FighterPanel({ board, label, enemy, vfxKind, vfxVariant, onInspect, onOpenCombo, beltThresholds }: { board: Board; label: string; enemy?: boolean; vfxKind?: MatVfxKind; vfxVariant?: number; onInspect: (card: CardEntry) => void; onOpenCombo?: () => void; beltThresholds: number[] }) {
+  const [comboPulse, setComboPulse] = useState(false);
+  const comboPulseTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (comboPulseTimer.current !== null) window.clearTimeout(comboPulseTimer.current); }, []);
   const fighter = cardFor(board.fighterId)!;
   const art = fighterIllustrationUrl(fighter) ?? artistUrl(fighter) ?? cardPlaceholderUrl;
   const nextBelt = belts[board.belt + 1];
@@ -2733,6 +2769,7 @@ function FighterPanel({ board, label, enemy, onInspect, onOpenCombo, beltThresho
   const xpSpan = Math.max(1, (nextBelt ? beltThresholds[board.belt + 1] : currentBeltXp) - currentBeltXp);
   const xpProgress = nextBelt ? Math.max(0, Math.min(100, (board.xp - currentBeltXp) / xpSpan * 100)) : 100;
   const hpProgress = Math.max(0, Math.min(100, board.hp / board.maxHp * 100));
+  const hpTier = healthTier(board.hp, board.maxHp);
   const statuses = boardStatusLabels(board);
   const combatStats: { stat: "ATK" | "DEF" | "SPD"; label: "ATK" | "DEF" | "SPD"; value: number }[] = [
     { stat: "ATK", label: "ATK", value: fighterStat(board, "ATK") },
@@ -2740,7 +2777,7 @@ function FighterPanel({ board, label, enemy, onInspect, onOpenCombo, beltThresho
     { stat: "SPD", label: "SPD", value: fighterStat(board, "Speed") },
   ];
 
-  return <section className={`fighter-panel fighter-dossier living-fighter-card paper-stack ${enemy ? "is-enemy" : ""}`} data-side={enemy ? "ai" : "player"} data-fighter={presentationSlug(fighter.name)}>
+  return <section className={`fighter-panel fighter-dossier living-fighter-card paper-stack hp-tier-${hpTier} ${enemy ? "is-enemy" : ""}${vfxKind ? ` ddb-vfx-${vfxKind} ddb-vfx-v${vfxVariant ?? 0}` : ""}`} data-side={enemy ? "ai" : "player"} data-fighter={presentationSlug(fighter.name)}>
     <i className="fighter-paperclip" aria-hidden="true" />
     <header className="fighter-card-heading"><div><span>{label}</span><button className="fighter-dossier-name" onClick={() => onInspect(fighter)}>{fighter.name}</button></div><b className="fighter-belt-badge" data-belt={presentationSlug(belts[board.belt].name)}>{belts[board.belt].name}<small>BELT</small></b></header>
     <div className="fighter-vitality" aria-label={`${fighter.name} has ${board.hp} of ${board.maxHp} HP`}>
@@ -2762,7 +2799,7 @@ function FighterPanel({ board, label, enemy, onInspect, onOpenCombo, beltThresho
     <div className="fighter-status-tray" aria-label={`${fighter.name} current statuses`}>{statuses.length ? statuses.map((status) => <span key={status}>{status}</span>) : <span>Standing ready</span>}</div>
     <p className="fighter-ability"><b>Registered ability</b><span>{fighter.rulesText ?? "No additional ability."}</span></p>
     <FighterEquipmentTabs board={board} enemy={enemy} onInspect={onInspect} />
-    {onOpenCombo && <button type="button" className="fighter-combo-launch" onClick={onOpenCombo} aria-label={`Open Combo docket, ${board.learnedCombos.length} of 2 learned`}><span>∞ COMBOS</span><b>{board.learnedCombos.length}/2</b><small>Open docket</small></button>}
+    {onOpenCombo && <button type="button" className={`fighter-combo-launch${comboPulse ? " is-pulsing" : ""}`} onClick={() => { setComboPulse(true); if (comboPulseTimer.current !== null) window.clearTimeout(comboPulseTimer.current); comboPulseTimer.current = window.setTimeout(() => setComboPulse(false), 620); onOpenCombo(); }} aria-label={`Open Combo docket, ${board.learnedCombos.length} of 2 learned`}><span>∞ COMBOS</span><b>{board.learnedCombos.length}/2</b><small>{comboPulse ? "Docket opened" : "Open docket"}</small></button>}
   </section>;
 }
 
@@ -2875,18 +2912,23 @@ function FeaturedComboPanel({ card, focus, learnedCount, attempted, discount = 0
 
 function MatLane({ label, cards: cardIds, activeId, onInspect }: { label: string; cards: string[]; activeId?: string | null; onInspect: (card: CardEntry) => void }) {
   const visible = cardIds;
-  return <section className="mat-lane" aria-label={`${label} cards currently on the Live Mat`}>
-    <header><span>{label}</span><b>{visible.length ? `${visible.length} CARD${visible.length === 1 ? "" : "S"}` : "CLEAR"}</b></header>
-    <div className="mat-lane-cards">
-      {visible.length ? visible.map((id, index) => { const card = cardFor(id); if (!card) return null; const art = artistUrl(card); return <button type="button" className={id === activeId ? "is-active" : ""} onClick={() => onInspect(card)} title={`Inspect ${card.name}`} key={`${id}-${index}`}>
+  const [expanded, setExpanded] = useState(true);
+  const laneId = `mat-lane-${presentationSlug(label)}`;
+  const countLabel = visible.length ? `${visible.length} CARD${visible.length === 1 ? "" : "S"}` : "CLEAR";
+  return <section className={`mat-lane${expanded ? " is-expanded" : " is-collapsed"}`} aria-label={`${label} cards currently on the Live Mat`}>
+    <button type="button" className="mat-lane-toggle" aria-expanded={expanded} aria-controls={laneId} onClick={() => setExpanded((current) => !current)}>
+      <span>{label}</span><b>{countLabel}</b><i aria-hidden="true">{expanded ? "−" : "+"}</i>
+    </button>
+    {expanded && <div className="mat-lane-cards" id={laneId}>
+      {visible.length ? visible.map((id, index) => { const card = cardFor(id); if (!card) return null; const art = artistUrl(card); return <button type="button" className={id === activeId ? "is-active" : ""} onClick={() => onInspect(card)} aria-label={`Inspect ${card.name} filing`} title={`Inspect ${card.name}`} key={`${id}-${index}`}>
         <span className="mat-card-visual">{art ? <img src={art} alt="" /> : <NativeCardArt card={card} />}</span>
-        <span className="mat-card-copy"><b>{card.name}</b><small>{card.subtype || card.cardType}{card.zone ? ` · ${card.zone}` : ""}</small></span>
+        <span className="mat-card-copy"><b>{card.name}</b><small>{card.subtype || card.cardType}{card.zone ? ` · ${card.zone}` : ""}</small><em className="mat-card-action">Inspect filing →</em></span>
       </button>; }) : <p>No cards committed this turn.</p>}
-    </div>
+    </div>}
   </section>;
 }
 
-function SetupView({ selectedId, setSelectedId, settings, setSettings, begin }: { selectedId: string; setSelectedId: (id: string) => void; settings: HouseSettings; setSettings: (settings: HouseSettings) => void; begin: () => void }) {
+function SetupView({ selectedId, setSelectedId, settings, setSettings, begin, mode, setMode, goTo }: { selectedId: string; setSelectedId: (id: string) => void; settings: HouseSettings; setSettings: (settings: HouseSettings) => void; begin: () => void; mode: GameModeId; setMode: (mode: GameModeId) => void; goTo: (view: "rules" | "cards" | "quickstart") => void }) {
   const [query, setQuery] = useState("");
   const selected = cardFor(selectedId) ?? characters[0];
   const filteredCharacters = characters.filter((character) => `${character.name} ${character.rulesText ?? ""} ${Object.values(character.stats).join(" ")}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
@@ -2895,13 +2937,23 @@ function SetupView({ selectedId, setSelectedId, settings, setSettings, begin }: 
     const next = choices[Math.floor(Math.random() * choices.length)] ?? filteredCharacters[0] ?? characters[0];
     setSelectedId(next.id);
   };
+  const chooseCharacter = (id: string) => setSelectedId(id);
   const toggleHouseRule = (id: string) => setSettings({ ...settings, houseRuleIds: settings.houseRuleIds.includes(id) ? settings.houseRuleIds.filter((entry) => entry !== id) : [...settings.houseRuleIds, id] });
-  return <main className="playtest-shell playtest-shell--setup shell"><MobilePlaytestNotice />
-    <section className="playtest-hero paper-stack"><span className="eyebrow">Department-certified digital field test</span><h1>Shuffle. Strike. Ascend.</h1><p>This is the actual Quick Duel loop: the fixed {starterIds.length}-card curriculum, all approved Market records, live fighter data, automated Locations, Reversals, Belt Exams, and a separate Combo docket.</p><div className="playtest-stamps"><span>{cards.length} approved records</span><span>Quick Duel vs. tactical AI</span><span>Progress saved on this device</span></div></section>
-    <section className="playtest-setup-grid">
-      <div className="playtest-roster paper-stack"><div className="roster-toolbar"><div><span className="eyebrow">1 · Choose a fighter</span><h2>Who signs the waiver?</h2></div><div><label><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a fighter" aria-label="Search fighters" /></label><button onClick={randomize}>Random draw</button></div></div><article className="selected-fighter-dossier"><img src={fighterIllustrationUrl(selected) ?? artistUrl(selected) ?? cardPlaceholderUrl} alt={selected.name} /><div><span>Selected delegation</span><h3>{selected.name}</h3><p>{selected.rulesText ?? "Ability pending an inspector with a functioning pen."}</p><div><b>{numberValue(selected.stats.ATK)}<small>ATK</small></b><b>{numberValue(selected.stats.DEF)}<small>DEF</small></b><b>{numberValue(selected.stats.Speed)}<small>SPD</small></b></div></div></article><div className="playtest-character-grid">{filteredCharacters.map((character) => <button key={character.id} className={selectedId === character.id ? "is-selected" : ""} onClick={() => setSelectedId(character.id)} aria-pressed={selectedId === character.id}><img src={fighterIllustrationUrl(character) ?? artistUrl(character) ?? cardPlaceholderUrl} alt="" loading="lazy" /><span>{character.name}</span><small>{numberValue(character.stats.ATK)} ATK · {numberValue(character.stats.DEF)} DEF · {numberValue(character.stats.Speed)} SPD</small></button>)}</div></div>
-      <aside className="playtest-rules-panel quick-duel-brief paper-stack"><span className="eyebrow">2 · One official teaser</span><h2>Certified Quick Duel</h2><p>One fighter. One tactical opponent. Fixed 25 Max HP, non-HP Belt rewards, the persistent Market, Locations, Reversals, Combos, and Belt progression. No mode selection and no setup maze—the Department has already made the questionable decisions.</p><div className="playtest-setup-options"><label><span>Opponent</span><select value={settings.difficulty} onChange={(event) => setSettings({ ...settings, difficulty: event.target.value as Difficulty })}>{Object.entries(DIFFICULTIES).map(([value, option]) => <option value={value} key={value}>{option.label}</option>)}</select></label><label><span>Combat motion</span><select value={settings.motion} onChange={(event) => setSettings({ ...settings, motion: event.target.value as MotionMode })}><option value="full">Full</option><option value="reduced">Reduced</option><option value="off">Off</option></select></label><label className="playtest-setup-check"><input type="checkbox" checked={settings.guided} onChange={(event) => setSettings({ ...settings, guided: event.target.checked })} /><span>Start with Decision Coach</span></label></div><fieldset className="playtest-house-rules"><legend>Optional house rules</legend><p>Only variants the current Quick Duel engine can enforce for both sides appear here.</p>{QUICK_DUEL_HOUSE_RULES.map((rule) => <label className="playtest-house-rule-option" key={rule.id}><input type="checkbox" checked={settings.houseRuleIds.includes(rule.id)} onChange={() => toggleHouseRule(rule.id)} /><span><b>{rule.name}</b><small>{rule.summary || rule.rule}</small></span></label>)}</fieldset><ul><li>Desktop playtest</li><li>{DIFFICULTIES[settings.difficulty].detail}</li><li>Progress saved on this device</li></ul><button className="button primary field-test-launch" onClick={() => begin()}>Begin Quick Duel as {selected.name} <span>→</span></button></aside>
+  const selectedMode = CANONICAL_GAME_MODES.find((entry) => entry.id === mode) ?? CANONICAL_GAME_MODES[0];
+  const modeMeta = GAME_MODE_META[mode];
+  return <main className="playtest-shell playtest-shell--setup shell paper-fu-game-gateway">
+    <section className="playtest-gateway-hero paper-stack">
+      <div><span className="version-pill"><span className="status-dot" /> Paper-Fu game desk / open</span><span className="eyebrow">Play the game / mode dispatch</span><h1>Choose your mat.<br /><em>Make it count.</em></h1><p>Every format starts here. Pick the kind of trouble you want to file, then we’ll hand you the right table, the right rules, and the right amount of dramatic paperwork.</p><div className="playtest-gateway-facts"><span><b>04</b> formats filed</span><span><b>27</b> fighters on record</span><span><b>{starterIds.length}</b> cards to start</span></div></div><div className="playtest-gateway-stamp"><span>FORM 08</span><strong>OPEN<br />MAT</strong><small>Department of Competitive Safety</small></div>
     </section>
+    <section className="play-mode-selector" aria-labelledby="play-mode-title">
+      <div className="play-mode-heading"><div><span className="eyebrow">01 / Select a format</span><h2 id="play-mode-title">What kind of trouble today?</h2></div><p>The game is bigger than Quick Duel. The current field test is only one door into the dojo.</p></div>
+      <div className="play-mode-grid">{CANONICAL_GAME_MODES.map((entry, index) => { const meta = GAME_MODE_META[entry.id]; const active = mode === entry.id; return <button type="button" className={`play-mode-card paper-stack interactive-paper tone-${meta.tone}${active ? " is-active" : ""}${meta.live ? " is-live" : ""}`} onClick={() => setMode(entry.id)} aria-pressed={active} key={entry.id}><div className="play-mode-card-top"><span className="play-mode-number">0{index + 1}</span><span className="play-mode-status">{meta.status}</span></div><h3>{entry.title}</h3><p>{meta.hook}</p><div className="play-mode-spec"><span>{entry.players}</span><span>{entry.fighters}</span></div><footer><b>{entry.win}</b><span>{active ? "Selected for setup" : meta.live ? "Open field test" : "Preview the docket"} →</span></footer></button>; })}</div>
+    </section>
+    {mode === "quick-duel" ? <section className="playtest-setup-grid playtest-quick-duel-setup" aria-labelledby="quick-duel-setup-title">
+      <div className="playtest-roster paper-stack"><div className="setup-panel-heading"><div><span className="eyebrow">02 / Choose your fighter</span><h2 id="quick-duel-setup-title">Who signs the waiver?</h2><p>Tap a face. The dossier answers back.</p></div><div className="roster-toolbar-actions"><label><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a fighter" aria-label="Search fighters" /></label><button type="button" onClick={randomize}>Random draw <span>↻</span></button></div></div><article className="selected-fighter-dossier" key={selected.id}><div className="selected-fighter-art-wrap"><img src={fighterIllustrationUrl(selected) ?? artistUrl(selected) ?? cardPlaceholderUrl} alt={selected.name} /><span className="dossier-selection-mark">FILED</span></div><div className="selected-fighter-copy"><span className="selected-fighter-kicker">Selected delegation · {selected.cardType}</span><h3>{selected.name}</h3><p>{selected.rulesText ?? "Ability pending an inspector with a functioning pen."}</p><div className="selected-fighter-stats"><b>{numberValue(selected.stats.ATK)}<small>ATK</small></b><b>{numberValue(selected.stats.DEF)}<small>DEF</small></b><b>{numberValue(selected.stats.Speed)}<small>SPD</small></b></div><span className="selection-receipt" aria-live="polite">{selected.name} is cleared for the mat.</span></div></article><div className="character-roster-heading"><span>Character cabinet</span><small>{filteredCharacters.length} faces match the current search</small></div><div className="playtest-character-grid">{filteredCharacters.map((character) => <button type="button" key={character.id} className={selectedId === character.id ? "is-selected" : ""} onClick={() => chooseCharacter(character.id)} aria-pressed={selectedId === character.id}><span className="character-card-tape" aria-hidden="true" /><span className="character-card-image"><img src={fighterIllustrationUrl(character) ?? artistUrl(character) ?? cardPlaceholderUrl} alt="" loading="lazy" /></span><span className="character-card-name">{character.name}</span><small>{numberValue(character.stats.ATK)} ATK · {numberValue(character.stats.DEF)} DEF · {numberValue(character.stats.Speed)} SPD</small>{selectedId === character.id && <b className="character-card-check" aria-hidden="true">✓</b>}</button>)}</div></div>
+      <aside className="playtest-rules-panel quick-duel-brief paper-stack"><div className="brief-panel-top"><span className="eyebrow">03 / Field test settings</span><span className="brief-panel-seal">LIVE</span></div><h2>{selectedMode.title}</h2><p>One fighter. One tactical opponent. A complete {starterIds.length}-card curriculum, persistent Market, Locations, Reversals, Combos, and Belt progression.</p><div className="brief-panel-callout"><b>{DIFFICULTIES[settings.difficulty].eyebrow}</b><span>{DIFFICULTIES[settings.difficulty].detail}</span></div><div className="playtest-setup-options"><label><span>Opponent filing</span><select value={settings.difficulty} onChange={(event) => setSettings({ ...settings, difficulty: event.target.value as Difficulty })}>{Object.entries(DIFFICULTIES).map(([value, option]) => <option value={value} key={value}>{option.label}</option>)}</select></label><label><span>Combat motion</span><select value={settings.motion} onChange={(event) => setSettings({ ...settings, motion: event.target.value as MotionMode })}><option value="full">Full impact</option><option value="reduced">Reduced impact</option><option value="off">Off</option></select></label><label className="playtest-setup-check"><input type="checkbox" checked={settings.guided} onChange={(event) => setSettings({ ...settings, guided: event.target.checked })} /><span>Start with Decision Coach</span></label></div><fieldset className="playtest-house-rules"><legend>Optional house rules</legend><p>Only variants the current Quick Duel engine can enforce for both sides appear here.</p>{QUICK_DUEL_HOUSE_RULES.map((rule) => <label className="playtest-house-rule-option" key={rule.id}><input type="checkbox" checked={settings.houseRuleIds.includes(rule.id)} onChange={() => toggleHouseRule(rule.id)} /><span><b>{rule.name}</b><small>{rule.summary || rule.rule}</small></span></label>)}</fieldset><ul><li>Playable on desktop and tablet</li><li>{cards.length} approved records in the cabinet</li><li>Progress saved on this device</li></ul><button type="button" className="button primary field-test-launch" onClick={() => begin()}>Open the Quick Duel mat <span>→</span></button></aside>
+    </section> : <section className="mode-briefing-card paper-stack" aria-live="polite"><div className={`mode-briefing-mark tone-${modeMeta.tone}`}><span>0{CANONICAL_GAME_MODES.findIndex((entry) => entry.id === mode) + 1}</span><b>FILED</b></div><div><span className="eyebrow">02 / Mode briefing</span><h2>{selectedMode.title}</h2><p>{selectedMode.detail || modeMeta.hook}</p><div className="mode-briefing-facts"><span><b>{selectedMode.players}</b> table size</span><span><b>{selectedMode.fighters}</b> roster load</span><span><b>{selectedMode.win}</b> victory condition</span></div><button type="button" className="button ghost" onClick={() => goTo("quickstart")}>Read the full mode brief <span>→</span></button></div><aside><span>Next filing</span><strong>{mode === "boss-blitz" ? "Boss room construction" : "Dedicated table build"}</strong><p>This format is documented and queued for the expanded game surface.</p><button type="button" className="text-link" onClick={() => setMode("quick-duel")}>Play Quick Duel while it’s live →</button></aside></section>}
+    <footer className="playtest-gateway-footer"><span><b>Department note:</b> Mode selection is now the front door. The engine underneath remains the canonical Quick Duel implementation.</span><button type="button" className="text-link" onClick={() => goTo("rules")}>Check the rules before entering →</button></footer>
   </main>;
 }
 
@@ -2916,8 +2968,16 @@ function MobilePlaytestNotice() {
 // orchestration — do not move canonical rules back into React.
 // -----------------------------------------------------------------------------
 
-export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards") => void }) {
+export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" | "quickstart") => void }) {
   const [selectedId, setSelectedId] = useState(() => characters.find((card) => card.name === "Sensei Ducktape")?.id ?? characters[0].id);
+  const [agentName] = useState(() => {
+    const name = readUserPreferences().displayName;
+    return name === "Paper-Fu Agent" ? "Field Agent" : name;
+  });
+  const [mode, setMode] = useState<GameModeId>(() => {
+    const saved = window.localStorage.getItem("ddb-selected-game-mode");
+    return CANONICAL_GAME_MODES.some((entry) => entry.id === saved) ? saved as GameModeId : "quick-duel";
+  });
   const [settings, setSettings] = useState<HouseSettings>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem("ddb-field-settings") ?? "null") as Partial<HouseSettings> | null;
@@ -2965,6 +3025,10 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
       return saved?.phase === "player-ascend" ? "market" : null;
     } catch { return null; }
   });
+  const [matVfx, setMatVfx] = useState<MatVfxEvent | null>(null);
+  const matVfxSequence = useRef(0);
+  const previousMatchRef = useRef<Match | null>(null);
+  const dialogRestoreRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
   const handleTrainingStripeHeal = () => {
     if (deskView !== "belt") return;
@@ -2987,9 +3051,78 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
   const inspected = inspectedId ? cardFor(inspectedId) : null;
 
   useEffect(() => {
+    const previous = previousMatchRef.current;
+    previousMatchRef.current = match;
+    if (!match || !previous) return;
+
+    const exchange = match.lastExchange;
+    const playerXpGain = Math.max(0, match.player.xp - previous.player.xp);
+    const aiXpGain = Math.max(0, match.ai.xp - previous.ai.xp);
+    let event: Omit<MatVfxEvent, "id"> | null = null;
+
+    if (exchange && exchange.id !== previous.lastExchange?.id) {
+      const blocked = exchange.outcome === "block";
+      const knockedOut = (exchange.target === "player" ? match.player.hp : match.ai.hp) <= 0;
+      const comboTriggered = /combo/i.test(match.log[0] ?? "");
+      const cue = knockedOut ? "KO!" : comboTriggered ? "COMBO!" : blocked ? "BLOCK!" : exchange.damage > 0 ? "POW!" : "CLASH!";
+      const cueTone = knockedOut || exchange.damage > 0 ? "damage" : blocked ? "block" : comboTriggered ? "attack" : "attack";
+      event = {
+        player: exchange.actor === "player" ? (knockedOut ? "ko" : comboTriggered ? "combo" : "attack") : exchange.target === "player" ? (knockedOut ? "ko" : blocked ? "block" : "hit") : undefined,
+        ai: exchange.actor === "ai" ? (knockedOut ? "ko" : comboTriggered ? "combo" : "attack") : exchange.target === "ai" ? (knockedOut ? "ko" : blocked ? "block" : "hit") : undefined,
+        screen: blocked ? undefined : "impact",
+        cue,
+        cueTone,
+        announcement: knockedOut ? "The field test has reached a conclusive impact." : blocked ? "Defense filed. The hit has been redirected to the paperwork." : exchange.damage > 0 ? `${exchange.damage} damage certified.` : "Attack resolved.",
+        xp: playerXpGain ? { side: "player", amount: playerXpGain } : aiXpGain ? { side: "ai", amount: aiXpGain } : undefined,
+      };
+    } else if (match.player.belt !== previous.player.belt || match.ai.belt !== previous.ai.belt) {
+      const side = match.player.belt !== previous.player.belt ? "player" : "ai";
+      const nextBoard = side === "player" ? match.player : match.ai;
+      const previousBoard = side === "player" ? previous.player : previous.ai;
+      const belt = belts[nextBoard.belt]?.name ?? "New";
+      const previousBelt = belts[previousBoard.belt ?? 0]?.name ?? "Previous";
+      event = {
+        player: side === "player" ? "promotion" : undefined,
+        ai: side === "ai" ? "promotion" : undefined,
+        screen: "scene",
+        cue: side === "player" ? "BELT UP!" : "RANK SHIFT!",
+        cueTone: "promotion",
+        announcement: side === "player" ? `${previousBelt} to ${belt}. Certification approved.` : `The opponent advances from ${previousBelt} to ${belt}.`,
+        promotion: { side, belt, previousBelt },
+      };
+    } else if (match.locationId !== previous.locationId) {
+      event = {
+        screen: "scene",
+        cue: "SCENE CHANGE",
+        cueTone: "summary",
+        announcement: `Scene changed to ${cardFor(match.locationId)?.name ?? "the next location"}.`,
+      };
+    } else if (playerXpGain || aiXpGain) {
+      const side = playerXpGain ? "player" : "ai";
+      event = {
+        player: side === "player" ? "certified" : undefined,
+        ai: side === "ai" ? "certified" : undefined,
+        cue: `+${playerXpGain || aiXpGain} XP`,
+        cueTone: "certified",
+        announcement: "Experience filed. The clipboard nods once.",
+        xp: { side, amount: playerXpGain || aiXpGain },
+      };
+    }
+
+    if (!event) return;
+    const id = ++matVfxSequence.current;
+    setMatVfx({ id, ...event });
+    const timer = window.setTimeout(() => setMatVfx((current) => current?.id === id ? null : current), event.promotion ? 1700 : 1100);
+    return () => window.clearTimeout(timer);
+  }, [match]);
+
+  useEffect(() => {
     window.localStorage.setItem("ddb-field-settings", JSON.stringify(settings));
     window.localStorage.setItem("ddb-vfx-mode", settings.motion);
   }, [settings]);
+  useEffect(() => {
+    window.localStorage.setItem("ddb-selected-game-mode", mode);
+  }, [mode]);
   useEffect(() => {
     try {
       if (match) window.localStorage.setItem("ddb-field-match", JSON.stringify(match));
@@ -3012,18 +3145,53 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
   }, []);
   useEffect(() => {
     setInspectorZoomed(false);
-    if (!inspectedId && !deskView && !logOpen && !coachOpen) return;
+    const hasDialog = Boolean(inspectedId || deskView || logOpen || coachOpen);
+    if (!hasDialog) {
+      dialogRestoreRef.current?.focus();
+      dialogRestoreRef.current = null;
+      return;
+    }
+    if (!dialogRestoreRef.current && document.activeElement instanceof HTMLElement) dialogRestoreRef.current = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     const close = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (inspectedId) setInspectedId(null);
-      else if (deskView) setDeskView(null);
-      else if (logOpen) setLogOpen(false);
-      else setCoachOpen(false);
+      if (event.key === "Escape") {
+        if (inspectedId) setInspectedId(null);
+        else if (deskView) setDeskView(null);
+        else if (logOpen) setLogOpen(false);
+        else setCoachOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = document.querySelector<HTMLElement>('.playtest-shell--live [role="dialog"]');
+      if (!dialog) return;
+      const focusables = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.getClientRects().length > 0);
+      if (focusables.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", close);
-    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", close); };
+    const focusFrame = window.requestAnimationFrame(() => {
+      const dialog = document.querySelector<HTMLElement>('.playtest-shell--live [role="dialog"]');
+      const first = dialog?.querySelector<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (first) first.focus();
+      else if (dialog) {
+        dialog.tabIndex = -1;
+        dialog.focus();
+      }
+    });
+    return () => { window.cancelAnimationFrame(focusFrame); document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", close); };
   }, [inspectedId, deskView, logOpen, coachOpen]);
 
   const begin = (fighterId = selectedId) => {
@@ -4591,7 +4759,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
     else if (!isPermanent(card)) playSupport(id);
   };
 
-  if (!match || !player || !ai || !playerFighter || !aiFighter) return <SetupView selectedId={selectedId} setSelectedId={setSelectedId} settings={settings} setSettings={setSettings} begin={begin} />;
+  if (!match || !player || !ai || !playerFighter || !aiFighter) return <SetupView selectedId={selectedId} setSelectedId={setSelectedId} settings={settings} setSettings={setSettings} begin={begin} mode={mode} setMode={setMode} goTo={goTo} />;
   const pendingAttack = match.selectedAttackId ? cardFor(match.selectedAttackId) : null;
   const currentLocation = cardFor(match.locationId);
   const comboOffer = match.comboOfferId ? cardFor(match.comboOfferId) : null;
@@ -4748,6 +4916,8 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
 
   const winnerFighter = match.winner === "ai" ? aiFighter : playerFighter;
   const winnerArt = artistUrl(winnerFighter);
+  const playerHpPercent = Math.max(0, Math.min(100, player.hp / player.maxHp * 100));
+  const aiHpPercent = Math.max(0, Math.min(100, ai.hp / ai.maxHp * 100));
   const phaseActionDock = !match.winner && <nav className={`playtest-action-dock dock-${match.phase}`} aria-label="Next legal action">
     <div>
       <span>{match.pendingDiscard ? "DISCARD" : match.phase === "player-initiate" ? "INITIATE" : match.phase === "player-yell" ? "YELL" : match.phase === "player-ascend" ? "ASCEND" : match.phase === "defense-window" ? "REACTION" : match.phase === "reversal-window" ? "REVERSAL" : "OPPONENT"}</span>
@@ -4761,39 +4931,41 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
     {match.phase === "ai-ready" && !settings.autoAi && <button onClick={runAiTurn}>Run computer turn →</button>}
   </nav>;
 
-  return <main className={`playtest-shell playtest-shell--live location-${locationTheme(currentLocation)} motion-${settings.motion} ${settings.guided ? "playtest-shell--guided" : ""} ${match.winner ? "playtest-shell--finished" : ""} shell`}><MobilePlaytestNotice />
+  return <main className={`playtest-shell playtest-shell--live location-${locationTheme(currentLocation)} motion-${settings.motion} ${settings.guided ? "playtest-shell--guided" : ""} ${match.winner ? "playtest-shell--finished" : ""}${matVfx?.screen === "impact" ? " ddb-vfx-screen-impact" : ""}${matVfx?.screen === "scene" ? " ddb-vfx-scene" : ""}${matVfx?.screen === "impact" ? ` ddb-vfx-screen-v${matVfx.id % 5}` : ""} shell`}>
+    {matVfx && <><div className="playtest-vfx-layer" aria-hidden="true"><div className={`playtest-vfx-cue playtest-vfx-cue--combat playtest-vfx-cue--${matVfx.cueTone}`} key={matVfx.id}><strong>{matVfx.cue}</strong><small>{matVfx.announcement}</small></div>{matVfx.xp && <div className={`playtest-xp-pop playtest-xp-pop--${matVfx.xp.side}`} key={`xp-${matVfx.id}`}>+{matVfx.xp.amount} XP</div>}{matVfx.promotion && <div className={`playtest-belt-promotion playtest-belt-promotion--${matVfx.promotion.side}`} key={`promotion-${matVfx.id}`}><span>{matVfx.promotion.side === "player" ? "CERTIFICATION APPROVED" : "OPPONENT FILING"}</span><strong>{matVfx.promotion.belt} BELT</strong><small>{matVfx.promotion.previousBelt} → {matVfx.promotion.belt} · {matVfx.promotion.side === "player" ? "Your rank has advanced." : "The paperwork got taller."}</small></div>}</div><div className="playtest-vfx-announcer" role="status" aria-live="polite">{matVfx.announcement}</div></>}
+
     <header className="playtest-topbar battle-versus-hud">
-      <div className="battle-hud-fighter battle-hud-fighter--player">
-        <span>YOU · {belts[player.belt].name} BELT</span><b>{playerFighter.name}</b>
-        <div><strong>{player.hp}<small> / {player.maxHp} HP</small></strong><i role="progressbar" aria-label={`${playerFighter.name} health`} aria-valuemin={0} aria-valuemax={player.maxHp} aria-valuenow={player.hp}><em style={{ width: `${Math.max(0, Math.min(100, player.hp / player.maxHp * 100))}%` }} /></i></div>
+      <div className={`battle-hud-fighter battle-hud-fighter--player hp-tier-${healthTier(player.hp, player.maxHp)}`} style={{ "--hp-progress": `${playerHpPercent}%` } as CSSProperties}>
+        <span><small>YOU · {playerFighter.name}</small></span><b>{agentName}</b>
+        <div><strong>{player.hp}<small> HP</small></strong><i role="progressbar" aria-label={`${playerFighter.name} health`} aria-valuemin={0} aria-valuemax={player.maxHp} aria-valuenow={player.hp}><em style={{ width: `${playerHpPercent}%` }} /></i></div>
       </div>
       <div className="versus-center" aria-label={`Round ${match.round}`}><span>ROUND</span><b>{match.round}</b></div>
-      <div className="battle-hud-fighter battle-hud-fighter--ai">
-        <span>COMPUTER · {belts[ai.belt].name} BELT</span><b>{aiFighter.name}</b>
-        <div><strong>{ai.hp}<small> / {ai.maxHp} HP</small></strong><i role="progressbar" aria-label={`${aiFighter.name} health`} aria-valuemin={0} aria-valuemax={ai.maxHp} aria-valuenow={ai.hp}><em style={{ width: `${Math.max(0, Math.min(100, ai.hp / ai.maxHp * 100))}%` }} /></i></div>
+      <div className={`battle-hud-fighter battle-hud-fighter--ai hp-tier-${healthTier(ai.hp, ai.maxHp)}`} style={{ "--hp-progress": `${aiHpPercent}%` } as CSSProperties}>
+        <span><small>COMPUTER · {aiFighter.name}</small></span><b>COMPUTER</b>
+        <div><strong>{ai.hp}<small> HP</small></strong><i role="progressbar" aria-label={`${aiFighter.name} health`} aria-valuemin={0} aria-valuemax={ai.maxHp} aria-valuenow={ai.hp}><em style={{ width: `${aiHpPercent}%` }} /></i></div>
       </div>
     </header>
     {match.winner && <section className={`match-result paper-stack ${match.winner === "player" ? "is-victory" : "is-defeat"}`}>
-      {match.winner === "player" && <div className="victory-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 8) * .11}s`, animationDuration: `${2.45 + (index % 5) * .2}s` }} key={index} />)}</div>}
+      {match.winner === "player" && <div className="victory-confetti" aria-hidden="true">{Array.from({ length: 44 }, (_, index) => <i className={`confetti-bit confetti-bit--${["action", "brass", "guard", "violet", "blue", "paper"][index % 6]}`} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 11) * .09}s`, animationDuration: `${2.35 + (index % 7) * .18}s`, "--confetti-drift": `${((index % 9) - 4) * 12}px` } as CSSProperties} key={index} />)}</div>}
       <div className="victory-certificate">
         <div className="victory-stamp"><span>{match.winner === "player" ? "VICTORY" : "CLOSED"}</span><b>{match.winner === "player" ? "CERTIFIED" : "FIELD TEST"}</b></div>
         <div className="victory-fighter">
           <div className="victory-art-frame">{winnerArt ? <img src={winnerArt} alt={winnerFighter.name} /> : <NativeCardArt card={winnerFighter} />}<span>{match.winner === "player" ? "OFFICIAL WINNER" : "OFFICIAL PROBLEM"}</span></div>
           <div className="victory-copy"><span className="eyebrow">Department of Questionably Regulated Martial Arts</span><h2>{match.winner === "player" ? `${winnerFighter.name} remains standing!` : `${winnerFighter.name} wins the field test.`}</h2><p>{match.winner === "player" ? "Confetti has been authorized, the clipboard has been impressed against its will, and your victory has been filed in triplicate." : "The result has been stamped, disputed, and filed beneath a suspicious vending-machine receipt. An immediate rematch remains irresponsibly available."}</p><strong>{match.winner === "player" ? "CERTIFICATE OF EXCESSIVE COMPETENCE" : "NOTICE OF TEMPORARY MARTIAL INCONVENIENCE"}</strong></div>
         </div>
-        <div className="match-report"><b>{match.round}<small>ROUNDS</small></b><b>{player.damageDealt}<small>DAMAGE DEALT</small></b><b>{player.cardsBought}<small>CARDS BOUGHT</small></b><b>{player.learnedCombos.length}<small>COMBOS LEARNED</small></b></div>
+        <dl className="match-report"><div><dt>{match.round}</dt><dd>Rounds survived</dd></div><div><dt>{player.damageDealt}</dt><dd>Damage dealt</dd></div><div><dt>{player.cardsBought}</dt><dd>Cards acquired</dd></div><div><dt>{player.learnedCombos.length}</dt><dd>Combos learned</dd></div></dl>
         <div className="victory-certificate-footer"><div className="victory-signature"><span>Certified by</span><b>Assistant Deputy Sensei, Filing Division</b><small>No one verified this signature.</small></div><div className="match-result-actions"><button className="button primary" onClick={() => begin(player.fighterId)}>Instant rematch →</button><button className="button ghost" onClick={() => setMatch(null)}>Choose another fighter</button></div></div>
       </div>
     </section>}
     <section className="playtest-arena">{settings.houseRuleIds.length > 0 && <div className="playtest-active-variants"><b>House rules active:</b>{QUICK_DUEL_HOUSE_RULES.filter((rule) => settings.houseRuleIds.includes(rule.id)).map((rule) => <span key={rule.id}>{rule.name}</span>)}</div>}
       <section className="playtest-table">
-        <div className="fighter-column fighter-column--player"><FighterPanel board={player} label="You" beltThresholds={beltThresholds} onInspect={(card) => setInspectedId(card.id)} onOpenCombo={() => setDeskView("combo")} /><LearnedComboRack states={learnedComboStates} onInspect={(card) => setInspectedId(card.id)} /></div>
+        <div className="fighter-column fighter-column--player"><FighterPanel board={player} label="You" vfxKind={matVfx?.player} vfxVariant={matVfx ? matVfx.id % 5 : undefined} beltThresholds={beltThresholds} onInspect={(card) => setInspectedId(card.id)} onOpenCombo={() => setDeskView("combo")} /><LearnedComboRack states={learnedComboStates} onInspect={(card) => setInspectedId(card.id)} /></div>
         <div className="combat-stage-column">
           <CombatStage match={match} currentLocation={currentLocation} selectedAttack={pendingAttack} turnCoach={turnCoach} guided={settings.guided} playerCards={player.playArea} aiCards={ai.playArea} onInspect={(card) => setInspectedId(card.id)} onDropCard={useHandCard} onOpenCoach={() => setCoachOpen(true)} />
           {match.phase === "ai-ready" && !match.winner && !settings.autoAi && <button className="button primary run-opponent-turn" onClick={runAiTurn}>Run computer turn →</button>}
           {match.phase === "ai-ready" && !match.winner && settings.autoAi && <span className="ai-thinking"><i /><i /><i /> Clipboard thinking</span>}
         </div>
-        <div className="fighter-column fighter-column--enemy"><FighterPanel board={ai} label="Computer" enemy beltThresholds={beltThresholds} onInspect={(card) => setInspectedId(card.id)} /></div>
+        <div className="fighter-column fighter-column--enemy"><FighterPanel board={ai} label="Computer" enemy vfxKind={matVfx?.ai} vfxVariant={matVfx ? matVfx.id % 5 : undefined} beltThresholds={beltThresholds} onInspect={(card) => setInspectedId(card.id)} /></div>
       </section>
     </section>
     <section className="playtest-workspace playtest-workspace--hand">
@@ -4825,7 +4997,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
             || match.phase === "reversal-window" && canPlayCoreReactionItem(card, "onBlock", { sameOpponentAsBlockedAttack: true })
           );
           const canReverse = match.phase === "reversal-window" && attack && attackAllowed;
-          return <PlayCard key={`${id}-${index}`} card={card} selected={match.selectedAttackId === id} disabled={choosingEffect ? true : choosingDiscard ? false : match.phase === "defense-window" ? !(canDefend || canReactConsumable || canReactItem) : match.phase === "reversal-window" ? !canReverse : match.phase === "player-initiate" ? !canInitiate : !canUse} onClick={() => useHandCard(id)} onInspect={() => setInspectedId(id)} />;
+          return <PlayCard key={`${id}-${index}`} card={card} handIndex={index} handTotal={player.hand.length} selected={match.selectedAttackId === id} disabled={choosingEffect ? true : choosingDiscard ? false : match.phase === "defense-window" ? !(canDefend || canReactConsumable || canReactItem) : match.phase === "reversal-window" ? !canReverse : match.phase === "player-initiate" ? !canInitiate : !canUse} onClick={() => useHandCard(id)} onInspect={() => setInspectedId(id)} />;
         })}</div>
         {match.phase === "reversal-window" && pendingAttack?.zone?.includes("Any") && <div className="hand-context-strip"><span>Choose reversal zone</span><fieldset className="zone-picker"><legend className="sr-only">Reversal zone</legend>{["High", "Mid", "Low"].map((zone) => <button type="button" className={match.selectedZone === zone ? "is-selected" : ""} onClick={() => setMatch((current) => current ? { ...current, selectedZone: zone } : current)} key={zone}>{zone}</button>)}</fieldset></div>}
         {match.phase === "player-yell" && !match.pendingDiscard && pendingAttack && attackHasFlexibleZone(player, pendingAttack) && <div className="hand-context-strip"><span>Declare zone for {pendingAttack.name}</span><fieldset className="zone-picker"><legend className="sr-only">Attack zone</legend>{["High", "Mid", "Low"].map((zone) => <button type="button" className={match.selectedZone === zone ? "is-selected" : ""} onClick={() => setMatch((current) => current ? { ...current, selectedZone: zone } : current)} key={zone}>{zone}</button>)}</fieldset></div>}
@@ -4870,6 +5042,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards")
             <span className="eyebrow">Certification ledger</span><h3>{belts[player.belt].name} Belt · {player.xp} XP</h3>
             <p>{nextBelt ? <><b>Next: {nextBelt.name} · {nextBeltXp} XP.</b> {nextBelt.exam.summary} <em>{nextBelt.reward.summary}</em></> : "Every available Belt has been certified."}</p>
             <div className="belt-track">{belts.map((belt, index) => <span className={index <= player.belt ? "earned" : ""} key={belt.name} style={{ "--belt-rank": belt.color } as CSSProperties} title={`${belt.name} Belt · ${beltThresholds[index]} XP · ${belt.exam.title}`}>{belt.name.slice(0, 1)}</span>)}</div>
+            <TrainingStripeRack board={player} match={match} />
             <div className="belt-ledger-list">{belts.map((belt, index) => <article className={index === player.belt ? "is-current" : index < player.belt ? "is-earned" : ""} key={belt.name} style={{ "--belt-rank": belt.color } as CSSProperties}><span>{index < player.belt ? "✓" : index === player.belt ? "●" : index + 1}</span><div><b>{belt.name} Belt · {belt.exam.title}</b><small>{beltThresholds[index]} XP · {belt.exam.summary}</small><small>{belt.reward.summary}</small></div></article>)}</div>
             {nextBelt && <button className="button primary" disabled={match.phase !== "player-ascend" || !canPromote} onClick={promote}>{canPromote && match.phase === "player-ascend" ? `Promote to ${nextBelt.name} →` : match.phase !== "player-ascend" ? "Promotion opens during Ascend" : !promotionAction.canUse ? "Belt Check action used · promotion next turn" : `${nextBelt.name}: ${nextBeltXp} XP + completed task`}</button>}
           </section>}
@@ -4929,6 +5102,53 @@ function beltTaskMet(board: Board) {
   // Quick Duel's Licensing Final is resolved by the KO victory itself, rather
   // than by a post-KO Ascend that players never get to take.
   return false;
+}
+
+function TrainingStripeRack({ board, match }: { board: Board; match: Match }) {
+  const config = canonicalTrainingStripeConfig;
+  const state = trainingStripeState(board);
+  const spend = config.rule.spend;
+  const maxHeld = Math.max(0, Math.trunc(Number(config.rule.maxHeld) || 0));
+  const availability = quickDuelTrainingStripeHealingAvailability(match, "player", "belt-check");
+  const nextBelt = canonicalTrainingStripeBelts[board.belt + 1];
+  const hidden = !config.rule.enabled || !nextBelt;
+  const status = state.provisional
+    ? "XP cleared the desk. One provisional stripe is waiting for the Belt Check stamp."
+    : state.held > 0
+      ? `${state.held} stripe${state.held === 1 ? "" : "s"} held for recovery or a future certification.`
+      : "No stripes held. The belt has requested more paperwork.";
+  const recoveryLabel = spend?.enabled
+    ? `Spend ${availability.stripeCost} Stripe${availability.stripeCost === 1 ? "" : "s"} · Recover ${availability.healHp} HP`
+    : "Stripe recovery unavailable";
+  const recoveryNote = !spend?.enabled
+    ? "Recovery is disabled for this format."
+    : !availability.timingAllowed
+      ? "Recovery opens during your Belt Check."
+      : !availability.beltCheckAction.canUse
+        ? "Your Belt Check action is already filed this turn."
+        : availability.atFullHp
+          ? "Already at maximum HP. Keep the stripe."
+          : availability.spendableHeld < availability.stripeCost
+            ? "No finalized Stripe is available to spend."
+            : `Recover up to ${availability.healHp} HP without exceeding ${availability.maxHp} Max HP.`;
+
+  return <section className="training-stripe-rack" hidden={hidden} aria-live="polite" aria-label={`${state.held} of ${maxHeld} Training Stripes on ${belts[board.belt]?.name ?? "current"} Belt`}>
+    <div className="training-stripe-copy">
+      <span>Training Stripes</span>
+      <b><strong>{state.held}</strong> / <span>{maxHeld}</span></b>
+      <small>{status}</small>
+      <button type="button" className={`training-stripe-heal${availability.canSpend ? " is-ready" : ""}`} disabled={!availability.canSpend} onClick={() => window.dispatchEvent(new CustomEvent(QUICK_DUEL_TRAINING_STRIPE_HEAL_REQUEST_EVENT))}>
+        <span>{recoveryLabel}</span>
+        <small>{recoveryNote}</small>
+      </button>
+    </div>
+    <div className="training-belt-strip" aria-hidden="true">
+      <i className="training-belt-knot" />
+      <div className="training-stripe-slots">{Array.from({ length: maxHeld }, (_, index) => <i className={index < state.held ? "is-earned" : ""} data-training-stripe-slot={index + 1} key={index} />)}</div>
+      <i className="training-belt-tail training-belt-tail-a" />
+      <i className="training-belt-tail training-belt-tail-b" />
+    </div>
+  </section>;
 }
 
 function markCompletedTask(board: Board) {

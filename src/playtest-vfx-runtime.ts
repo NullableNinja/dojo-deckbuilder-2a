@@ -40,20 +40,22 @@ function shellElement() {
 }
 
 function ensureLayer() {
-  let layer = document.querySelector<HTMLElement>(".playtest-vfx-layer");
+  let layer = document.querySelector<HTMLElement>("[data-ddb-vfx-runtime-layer]");
   if (layer) return layer;
   layer = document.createElement("div");
-  layer.className = "playtest-vfx-layer";
+  layer.className = "playtest-vfx-layer playtest-vfx-layer--runtime";
+  layer.dataset.ddbVfxRuntimeLayer = "true";
   layer.setAttribute("aria-hidden", "true");
   document.body.append(layer);
   return layer;
 }
 
 function ensureAnnouncer() {
-  let announcer = document.querySelector<HTMLElement>(".playtest-vfx-announcer");
+  let announcer = document.querySelector<HTMLElement>("[data-ddb-vfx-runtime-announcer]");
   if (announcer) return announcer;
   announcer = document.createElement("div");
   announcer.className = "playtest-vfx-announcer";
+  announcer.dataset.ddbVfxRuntimeAnnouncer = "true";
   announcer.setAttribute("aria-live", "polite");
   announcer.setAttribute("aria-atomic", "true");
   document.body.append(announcer);
@@ -76,8 +78,8 @@ function pulse(element: HTMLElement | null, className: string, duration = 520) {
 
 function cueLabel(side: FighterSide, label: string, tone: string, duration: number, lane: "combat" | "summary" = "combat") {
   if (vfxMode() === "off") return;
-  document.querySelectorAll(".playtest-vfx-cue").forEach((node) => node.remove());
   const layer = ensureLayer();
+  layer.querySelectorAll(".playtest-vfx-cue").forEach((node) => node.remove());
   const node = document.createElement("div");
   node.className = `playtest-vfx-cue playtest-vfx-cue--${side} playtest-vfx-cue--${lane} playtest-vfx-cue--${tone}`;
   node.textContent = label;
@@ -88,8 +90,8 @@ function cueLabel(side: FighterSide, label: string, tone: string, duration: numb
 
 function centerBanner(label: string, tone: string, duration = 720) {
   if (vfxMode() === "off") return;
-  document.querySelectorAll(".playtest-vfx-banner").forEach((node) => node.remove());
   const layer = ensureLayer();
+  layer.querySelectorAll(".playtest-vfx-banner").forEach((node) => node.remove());
   const node = document.createElement("div");
   node.className = `playtest-vfx-banner playtest-vfx-banner--${tone}`;
   node.textContent = label;

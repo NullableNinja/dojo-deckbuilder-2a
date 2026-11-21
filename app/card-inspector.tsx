@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import cardEffectsJson from "./data/card-effects.json";
 
@@ -78,6 +78,51 @@ export type CardInspectorProps = {
 };
 
 const effectRegistry = cardEffectsJson as unknown as CardEffectRegistry;
+
+function useInspectorDialog(onClose: () => void) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const bodyOverflow = document.body.style.overflow;
+    const bodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarGap = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+    document.body.style.overflow = "hidden";
+    if (scrollbarGap) {
+      const currentPadding = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${currentPadding + scrollbarGap}px`;
+    }
+    const firstControl = dialogRef.current?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+    (firstControl ?? dialogRef.current)?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? [])
+        .filter((element) => element.getAttribute("aria-hidden") !== "true");
+      if (!controls.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = bodyOverflow;
+      document.body.style.paddingRight = bodyPaddingRight;
+      if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return dialogRef;
+}
 
 const TRIGGER_LABELS: Record<string, string> = {
   passive: "Always active",
@@ -257,24 +302,29 @@ class CardInspectorErrorBoundary extends Component<CardInspectorBoundaryProps, C
 
   render() {
     if (!this.state.failed) return this.props.children;
-    return createPortal(
-      <div className="universal-card-inspector-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && this.props.onClose()}>
-        <article className="universal-card-inspector" role="alertdialog" aria-modal="true" aria-labelledby="universal-card-inspector-error-title">
-          <button className="card-inspector-close" type="button" onClick={this.props.onClose} aria-label="Close card inspector">×</button>
-          <section className="card-inspector-details">
-            <header className="card-inspector-title-block">
-              <span className="eyebrow">Dojo Dossier recovery</span>
-              <h2 id="universal-card-inspector-error-title">The filing cabinet jammed.</h2>
-              <p className="card-inspector-flavor">This card could not be rendered, but the rest of the dojo is still standing.</p>
-            </header>
-            <aside className="card-inspector-rules"><span>Recovery</span><p>Close this Dossier and try the card again. The failure has been contained so it cannot blank the entire Playtest.</p></aside>
-            <button type="button" className="button primary" onClick={this.props.onClose}>Return to the dojo</button>
-          </section>
-        </article>
-      </div>,
-      document.body,
-    );
+    return <CardInspectorErrorDialog onClose={this.props.onClose} />;
   }
+}
+
+function CardInspectorErrorDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useInspectorDialog(onClose);
+  return createPortal(
+    <div className="universal-card-inspector-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <article ref={dialogRef} className="universal-card-inspector" role="alertdialog" aria-modal="true" aria-labelledby="universal-card-inspector-error-title" tabIndex={-1}>
+        <button className="card-inspector-close" type="button" onClick={onClose} aria-label="Close card inspector">×</button>
+        <section className="card-inspector-details">
+          <header className="card-inspector-title-block">
+            <span className="eyebrow">Dojo Dossier recovery</span>
+            <h2 id="universal-card-inspector-error-title">The filing cabinet jammed.</h2>
+            <p className="card-inspector-flavor">This card could not be rendered, but the rest of the dojo is still standing.</p>
+          </header>
+          <aside className="card-inspector-rules"><span>Recovery</span><p>Close this Dossier and try the card again. The failure has been contained so it cannot blank the entire Playtest.</p></aside>
+          <button type="button" className="button primary" onClick={onClose}>Return to the dojo</button>
+        </section>
+      </article>
+    </div>,
+    document.body,
+  );
 }
 
 function CardInspectorContent({
@@ -293,6 +343,7 @@ function CardInspectorContent({
   onNext,
   onClose,
 }: CardInspectorProps) {
+  const dialogRef = useInspectorDialog(onClose);
   const resolvedEffectEntry = effectEntry ?? effectRegistry.cards?.[card.catalogId];
   const resolvedEffectRevision = effectRevision ?? effectRegistry.rulesRevision ?? effectRegistry.rulesVersion;
   const statPairs = Object.entries(card.stats ?? {});
@@ -307,7 +358,7 @@ function CardInspectorContent({
   ].filter((entry): entry is string[] => Boolean(entry));
 
   return createPortal(<div className="universal-card-inspector-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <article className="universal-card-inspector" role="dialog" aria-modal="true" aria-labelledby="universal-card-inspector-title" tabIndex={-1}>
+    <article ref={dialogRef} className="universal-card-inspector" role="dialog" aria-modal="true" aria-labelledby="universal-card-inspector-title" tabIndex={-1}>
       <button className="card-inspector-close" type="button" onClick={onClose} aria-label="Close card inspector">×</button>
       <nav className="card-inspector-nav" aria-label="Browse cards">
         <button type="button" onClick={onPrevious} disabled={previousDisabled} aria-label={previousDisabled ? "No previous card" : `Previous card: ${previousName}`}><span aria-hidden="true">←</span><span><small>Previous</small><b>{previousDisabled ? "First card" : previousName}</b></span></button>

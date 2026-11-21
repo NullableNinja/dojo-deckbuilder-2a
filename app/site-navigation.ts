@@ -30,7 +30,7 @@ const SITE_NAVIGATION_ITEMS: SiteNavigationItem[] = [
     shortLabel: "Play",
     description: "Fight the computer using the live card catalog.",
     desktop: true,
-    mobileMenu: false,
+    mobileMenu: true,
     mobileBottom: false,
     order: 10,
   },
