@@ -57,7 +57,7 @@ jobs:
           let html = await readFile(indexPath, "utf8");
           html = html.replace("__DDB_BUILD__", build);
           html = html.replace(
-            /((?:src|href)="\/dojo-deckbuilder\/assets\/[^"?]+\.(?:js|css))"/g,
+            /((?:src|href)="\/[^/]+\/assets\/[^"?]+\.(?:js|css))"/g,
             (_, asset) => `${asset}?build=${build.slice(0, 12)}"`,
           );
 
