@@ -59,6 +59,13 @@ export type LegacyAttackHostContext = {
   equipmentTags?: readonly string[];
 };
 
+function locationDeltaNotes(card: LocationCardLike, changes: { label: string; value: number }[]) {
+  const name = card.name || "Current Scene";
+  return changes.filter(({ value }) => value !== 0).map(({ label, value }) =>
+    `${name}: ${value > 0 ? "+" : ""}${value} ${label}`,
+  );
+}
+
 /**
  * Compatibility adapter for the current Quick Duel attack hook. It maps host
  * facts to canonical predicate names, but all gameplay semantics still come
@@ -83,10 +90,10 @@ export function structuredLocationAttackForHost(
     matched: isStructuredLocation(card),
     power: delta.attackPower,
     damage: delta.damage,
-    notes: delta.commands.map((command) => {
-      const amount = command.amount ? ` ${command.amount >= 0 ? "+" : ""}${command.amount}` : "";
-      return `${command.effectId}${amount}`;
-    }),
+    notes: locationDeltaNotes(card, [
+      { label: "Attack Power", value: delta.attackPower },
+      { label: "damage", value: delta.damage },
+    ]),
   };
 }
 
@@ -108,10 +115,7 @@ export function structuredLocationDefenseForHost(
   return {
     matched: isStructuredLocation(card),
     guard: resolution.delta.guard,
-    notes: resolution.delta.commands.map((command) => {
-      const amount = command.amount ? ` ${command.amount >= 0 ? "+" : ""}${command.amount}` : "";
-      return `${command.effectId}${amount}`;
-    }),
+    notes: locationDeltaNotes(card, [{ label: "Guard", value: resolution.delta.guard }]),
   };
 }
 
@@ -129,10 +133,7 @@ export function structuredLocationKataFocusForHost(
   return {
     matched: isStructuredLocation(card),
     focus: resolution.delta.focus,
-    notes: resolution.delta.commands.map((command) => {
-      const amount = command.amount ? ` ${command.amount >= 0 ? "+" : ""}${command.amount}` : "";
-      return `${command.effectId}${amount}`;
-    }),
+    notes: locationDeltaNotes(card, [{ label: "Focus", value: resolution.delta.focus }]),
   };
 }
 

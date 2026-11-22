@@ -261,11 +261,11 @@
   .home-mode-card.tone-violet { --home-mode-accent: var(--pf-violet); }
   .home-mode-card.is-live { color: #fffaf0; background: var(--pf-blue-deep); box-shadow: var(--pf-shadow-ink); }
   .home-mode-card.is-live::before { background: var(--pf-canvas-deep); }
-  .home-mode-card.is-live::after { background: var(--pf-surface-dim); }
+  .home-mode-card.is-live::after { background: var(--pf-blue-deep); }
   .home-mode-card-top { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .home-mode-index { color: var(--home-mode-accent, var(--pf-action)); font-family: var(--pf-display); font-size: 30px; line-height: .8; }
   .home-mode-status { border: 1px solid var(--home-mode-accent, var(--pf-action)); padding: 6px 7px; color: var(--home-mode-accent, var(--pf-action)); font-family: var(--pf-mono); font-size: 7px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
-  .home-mode-card.is-live .home-mode-status { color: var(--pf-brass-soft); border-color: var(--pf-brass); }
+  .home-mode-card.is-live .home-mode-status { color: var(--pf-brass); border-color: var(--pf-brass); }
   .home-mode-card h3 { margin: auto 0 10px; color: inherit; font-family: var(--pf-display); font-size: clamp(25px, 2.45vw, 35px); line-height: .88; text-transform: uppercase; }
   .home-mode-card p { min-height: 78px; margin: 0; color: var(--pf-muted); font-size: 11px; line-height: 1.5; }
   .home-mode-card.is-live p { color: #cbd7e0; }

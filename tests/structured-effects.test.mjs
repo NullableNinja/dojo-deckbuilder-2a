@@ -7,7 +7,7 @@ import { isSupportedComboResolver, structuredComboEffects } from "../app/combo-r
 import { createBossRuntimeState, resolveBossCardEvent } from "../app/boss-runtime.ts";
 import { structuredDefenseEquipmentBonus, structuredEquipmentAfterResolveResolution, structuredEquipmentAttackDeclarationResolution, structuredEquipmentBlockResolution, structuredEquipmentCurrentAttackFlow, structuredEquipmentDamagePrevention, structuredEquipmentHitResolution, structuredEquipmentMinimumSpeed, structuredEquipmentPurchaseResolution, structuredEquipmentRestrictions, structuredEquipmentSpeedPenaltyProtection, structuredEquipmentThresholdProtection, structuredPostBlockCycle } from "../app/equipment-structured.ts";
 import { equipmentOnEquipPlan } from "../app/effect-resolvers.ts";
-import { structuredLocationDefenseForHost, structuredLocationKataFocusForHost } from "../app/location-playtest-bridge.ts";
+import { structuredLocationAttackForHost, structuredLocationDefenseForHost, structuredLocationKataFocusForHost } from "../app/location-playtest-bridge.ts";
 
 const cards = JSON.parse(await readFile(new URL("../app/data/cards.json", import.meta.url), "utf8")).cards ?? [];
 const registry = JSON.parse(await readFile(new URL("../app/data/card-effects.json", import.meta.url), "utf8"));
@@ -35,8 +35,13 @@ test("Equipment Flow and Location modifiers resolve from canonical contracts", (
 
   const bus = structuredLocationDefenseForHost(card("DDB-LOC-CORE-007"), { zone: "High", defenseTags: ["Dodge"] });
   assert.equal(bus.guard, -1);
+  assert.deepEqual(bus.notes, ["City Bus in Motion: -1 Guard"]);
   const library = structuredLocationKataFocusForHost(card("DDB-LOC-CORE-039"), { firstKataThisTurn: true });
   assert.equal(library.focus, 1);
+  assert.deepEqual(library.notes, [`${card("DDB-LOC-CORE-039").name}: +1 Focus`]);
+  const rink = structuredLocationAttackForHost(card("DDB-LOC-CORE-008"), { zone: "Mid", firstAttack: true });
+  assert.equal(rink.power, -1);
+  assert.deepEqual(rink.notes, ["Community Ice Rink: -1 Attack Power"]);
 });
 
 test("Equipment restrictions resolve from canonical conditions rather than card identity", () => {

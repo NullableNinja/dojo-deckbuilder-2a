@@ -1016,6 +1016,10 @@ export default function CompanionApp() {
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
+    if (userMenuOpen) {
+      closeUserMenu();
+      userMenuButtonRef.current?.focus({ preventScroll: true });
+    }
     setTheme(next);
     pushToast({ kind: "stamp", eyebrow: "Lighting cue", title: next === "dark" ? "After-hours dojo" : "Daylight dojo", message: next === "dark" ? "Ink, brass, and quiet focus." : "Paper, pigment, and open play." });
   };

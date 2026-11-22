@@ -115,12 +115,12 @@
 .play-mode-card.tone-violet { --mode-accent: var(--pf-violet); }
 .play-mode-card.is-live { color: #fffaf0; background: var(--pf-blue-deep); box-shadow: var(--pf-shadow-ink); }
 .play-mode-card.is-live::before { background: var(--pf-canvas-deep); }
-.play-mode-card.is-live::after { background: var(--pf-surface-dim); }
+.play-mode-card.is-live::after { background: var(--pf-blue-deep); }
 .play-mode-card.is-active { border-color: var(--mode-accent); box-shadow: var(--pf-shadow-lifted); transform: translate(-3px, -5px) rotate(-.3deg); }
 .play-mode-card-top { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .play-mode-number { color: var(--mode-accent); font-family: var(--display); font-size: 30px; line-height: .8; }
 .play-mode-status { border: 1px solid var(--mode-accent); padding: 6px 7px; color: var(--mode-accent); font-family: var(--pf-mono); font-size: 7px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
-.play-mode-card.is-live .play-mode-status { border-color: var(--pf-brass); color: var(--pf-brass-soft); }
+.play-mode-card.is-live .play-mode-status { border-color: var(--pf-brass); color: var(--pf-brass); }
 .play-mode-card h3 { margin: auto 0 10px; color: inherit; font-family: var(--display); font-size: clamp(25px, 2.35vw, 34px); line-height: .86; text-transform: uppercase; }
 .play-mode-card p { min-height: 74px; margin: 0; color: var(--setup-muted); font-size: 11px; line-height: 1.5; }
 .play-mode-card.is-live p { color: #ccd8e1; }
@@ -1498,7 +1498,8 @@
 .fight-log-groups { max-height: min(55dvh, 520px); display: grid; gap: 12px; overflow: auto; padding-right: 4px; }
 .fight-log-groups > section { border-left: 5px solid var(--mat-green); padding-left: 9px; }
 .fight-log-groups h3 { margin: 0 0 6px; color: var(--mat-green); font-family: var(--display); font-size: 15px; }
-.fight-log-dialog .fight-log-groups ol { max-height: none; overflow: visible; }
+.fight-log-dialog .fight-log-groups ol { max-height: none; overflow: visible; list-style: none; }
+.fight-log-groups li > b { margin-right: .5em; }
 
 /* End-of-duel certificate. */
 .playtest-shell--live .match-result {
