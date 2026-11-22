@@ -119,6 +119,7 @@
 .play-mode-card.is-active { border-color: var(--mode-accent); box-shadow: var(--pf-shadow-lifted); transform: translate(-3px, -5px) rotate(-.3deg); }
 .play-mode-card-top { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .play-mode-number { color: var(--mode-accent); font-family: var(--display); font-size: 30px; line-height: .8; }
+.play-mode-card.is-live .play-mode-number { color: var(--pf-brass); }
 .play-mode-status { border: 1px solid var(--mode-accent); padding: 6px 7px; color: var(--mode-accent); font-family: var(--pf-mono); font-size: 7px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .play-mode-card.is-live .play-mode-status { border-color: var(--pf-brass); color: var(--pf-brass); }
 .play-mode-card h3 { margin: auto 0 10px; color: inherit; font-family: var(--display); font-size: clamp(25px, 2.35vw, 34px); line-height: .86; text-transform: uppercase; }
@@ -5196,4 +5197,50 @@ body:has(.playtest-shell--live .match-result) { overflow: hidden; }
   .playtest-gateway-hero h1 { font-size: clamp(32px, 10vw, 44px); }
   .playtest-gateway-stamp { display: none; }
   .playtest-gateway-facts { display: flex; }
+}
+
+/* A readable record of the last exchange; the rules engine remains authoritative. */
+.playtest-shell--live .combat-receipt-backdrop { display: grid; place-items: center; background: rgba(5, 12, 20, .72); }
+.combat-receipt-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-x: hidden; overflow-y: auto; border: 1px solid var(--pf-line-strong); border-top: 7px solid var(--pf-action); padding: clamp(22px, 4vw, 36px); color: var(--pf-ink); background: var(--pf-surface-raised); box-shadow: var(--pf-shadow-lifted); }
+.combat-receipt-dialog h2 { margin: 8px 40px 12px 0; font-family: var(--pf-display); font-size: clamp(31px, 4vw, 46px); line-height: 1; text-transform: uppercase; }
+.combat-receipt-intro { max-width: 560px; color: var(--pf-ink-soft); font-size: 14px; line-height: 1.55; }
+.combat-receipt-intro strong { color: var(--pf-ink); }
+.combat-receipt-math { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 8px; margin: 20px 0; border: 1px solid var(--pf-line); padding: 15px; background: var(--pf-surface); text-align: center; }
+.combat-receipt-math div { min-width: 0; display: grid; gap: 5px; }
+.combat-receipt-math small { color: var(--pf-ink-soft); font: 800 10px var(--pf-mono); text-transform: uppercase; }
+.combat-receipt-math strong { color: var(--pf-ink); font: 700 clamp(26px, 4vw, 40px) var(--pf-display); line-height: 1; }
+.combat-receipt-math div:last-child strong { color: var(--pf-action); }
+.combat-receipt-math > span { color: var(--pf-ink-soft); font-weight: 800; }
+.combat-receipt-explanation { border-left: 4px solid var(--pf-brass); padding-left: 15px; }
+.combat-receipt-explanation h3 { margin: 16px 0 6px; font-family: var(--pf-display); font-size: 18px; }
+.combat-receipt-explanation p, .combat-receipt-explanation li { color: var(--pf-ink-soft); font-size: 13px; line-height: 1.55; }
+.combat-receipt-explanation ul { padding-left: 20px; }
+.combat-receipt-explanation b { color: var(--pf-ink); }
+.combat-receipt-footnote { margin-bottom: 20px; }
+.combat-receipt-dialog > .button { min-height: 44px; }
+.reset-duel-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.reset-duel-actions .button { min-height: 44px; }
+@media (max-width: 600px) { .combat-receipt-math { gap: 4px; padding: 12px 7px; } .combat-receipt-math small { font-size: 9px; } .combat-receipt-dialog > .button { width: 100%; } }
+.victory-last-exchange { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0; border: 1px solid var(--pf-line); border-left: 5px solid var(--pf-action); padding: 14px 16px; color: var(--pf-ink); background: var(--pf-surface); }
+.victory-last-exchange div { display: grid; gap: 3px; }
+.victory-last-exchange span { color: var(--pf-action); font: 800 10px var(--pf-mono); letter-spacing: .06em; text-transform: uppercase; }
+.victory-last-exchange strong { font: 700 20px var(--pf-display); }
+.victory-last-exchange p { margin: 0; color: var(--pf-ink-soft); font-size: 12px; }
+.victory-last-exchange > b { font: 700 19px var(--pf-display); }
+.victory-last-exchange > b small { color: var(--pf-ink-soft); font: 800 9px var(--pf-mono); }
+
+/* A hover-only directory cannot be discovered on a touch screen. */
+@media (hover: none), (pointer: coarse) {
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay { height: 76px; min-height: 76px; }
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay .header-inner,
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay::before { transform: none; }
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay .reading-progress { top: 76px; }
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay .reading-progress::after { content: none; }
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay .reading-progress > b { visibility: visible; }
+  .playtest-shell--live > .playtest-topbar.battle-versus-hud { top: 95px !important; }
+}
+@media (max-width: 760px) and (hover: none), (max-width: 760px) and (pointer: coarse) {
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay { height: 66px; min-height: 66px; }
+  .site-frame:has(.playtest-shell--live) .site-header--gameplay .reading-progress { top: 66px; }
+  .playtest-shell--live > .playtest-topbar.battle-versus-hud { top: 79px !important; }
 }
