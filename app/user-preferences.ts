@@ -1,3 +1,4 @@
+import { SITE_STORAGE } from "./storage-keys";
 import { AVATAR_OPTIONS } from "./avatar-catalog";
 
 export type AccentKey = "ember" | "crimson" | "hot-pink" | "cobalt" | "brass" | "plum" | "guard";
@@ -28,9 +29,9 @@ export type UserPreferences = {
 
 export type PresentationPreferences = Pick<UserPreferences, "density" | "reducedMotion" | "toastDuration" | "effectIntensity" | "displayFace">;
 
-export const USER_PREFERENCES_STORAGE_KEY = "paper-fu-user-profile-v1";
-export const LEGACY_LAB_STORAGE_KEY = "paper-fu-design-lab-v2";
-export const THEME_STORAGE_KEY = "paper-fu-theme";
+export const USER_PREFERENCES_STORAGE_KEY = SITE_STORAGE.profile;
+export const LEGACY_LAB_STORAGE_KEY = SITE_STORAGE.legacyLab;
+export const THEME_STORAGE_KEY = SITE_STORAGE.theme;
 
 const THEME_COLORS: Record<Theme, string> = {
   light: "#d7dbe1",

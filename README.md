@@ -4,7 +4,17 @@ The official interactive companion and Quick Duel field test for **Dojo Deckbuil
 
 ## Live site
 
-<https://nullableninja.github.io/dojo-deckbuilder/>
+<https://nullableninja.github.io/dojo-deckbuilder-2a/>
+
+## Fight Night in 2a
+
+Choose either fighter from the 41-character roster, select rival difficulty, and start a Quick Duel from the bout card. Instant rematch keeps the same fighters.
+
+The Deck Notebook groups your collection, discard pile, and equipped cards without revealing draw order. Open it from the utility bar or the Deck and Discard counters, then select a card to inspect its full rules.
+
+Finished bouts build a device-local record of the last 30 results, including wins, consecutive wins, rounds, damage, purchases, and final belt. Reloading a result does not count it twice. Clearing browser storage removes that record.
+
+Browser saves, settings, theme, profile, and binder use a dedicated `ddb-2a-` namespace. The first visit to this release starts an independent save; legacy entries belonging to other versions are retained and are not imported automatically.
 
 ## Source of truth
 
@@ -60,7 +70,7 @@ See `docs/ENGINE-ARCHITECTURE.md` for the executable-data boundary.
 - `scripts/` — canonical generation/validation and production-card tooling
 - `public/` — static web/PWA/download assets
 
-Quick Duel presentation is intentionally consolidated into `app/globals.css`, `app/card-inspector.css`, and `app/playtest.css`; do not reintroduce one-off patch stylesheets.
+Shared presentation lives in `app/globals.css`, `app/card-inspector.css`, and `app/playtest.css`. The 2a identity is composed in `app/field-redesign.css`; `app/fight-night.css` owns the Fight Night lobby, notebook, and bout presentation. Keep new styles attached to their components and use the shared theme tokens.
 
 ## Deployment
 

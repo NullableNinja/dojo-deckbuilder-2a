@@ -1,11 +1,12 @@
+import { SITE_STORAGE } from "../app/storage-keys";
 import { derivePlaytestEvents, dispatchPlaytestEvent, PLAYTEST_EVENT_NAME, type FighterSide, type PlaytestEvent, type PlaytestMatchSnapshot } from "./playtest-events";
 import { buildVfxPresentationCues, type VfxPresentationCue } from "./playtest-vfx-presentation";
 
 type VfxWindow = Window & { __ddbPlaytestVfxInstalled?: boolean };
 type VfxMode = "full" | "reduced" | "off";
 
-const MATCH_KEY = "ddb-field-match";
-const MODE_KEY = "ddb-vfx-mode";
+const MATCH_KEY = SITE_STORAGE.match;
+const MODE_KEY = SITE_STORAGE.motion;
 const CUE_GAP_MS = 35;
 const MAX_PENDING_CUES = 4;
 const vfxWindow = window as VfxWindow;

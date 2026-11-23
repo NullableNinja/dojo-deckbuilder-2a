@@ -1,3 +1,4 @@
+import { SITE_STORAGE } from "./storage-keys";
 "use client";
 
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
@@ -166,7 +167,7 @@ const paperScrollBehavior = (): ScrollBehavior => typeof window !== "undefined" 
 
 const cardData = cardsJson as unknown as { version: string; cards: CardEntry[]; counts: Record<string, number>; decks: string[]; total: number };
 const rulesData = CANONICAL_RULES as unknown as { version: string; chapters: RuleChapter[]; officialRulings: OfficialRuling[]; glossary: { term: string; meaning: string }[]; houseRules: HouseRule[] };
-const BINDER_STORAGE_KEY = "dojo-binder-v1";
+const BINDER_STORAGE_KEY = SITE_STORAGE.binder;
 const readStoredStringSet = (key: string) => {
   if (typeof window === "undefined") return new Set<string>();
   try {

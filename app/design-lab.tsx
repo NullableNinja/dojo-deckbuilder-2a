@@ -1,3 +1,4 @@
+import { SITE_STORAGE } from "./storage-keys";
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -271,7 +272,7 @@ function DesignLab({ theme, onToggleTheme, onToast }: DesignLabProps) {
     setToastDuration(DEFAULT_SETTINGS.toastDuration);
     setEffectIntensity(DEFAULT_SETTINGS.effectIntensity);
     setLastAction("Preferences reset. The clipboard is blank again.");
-    window.localStorage.removeItem("paper-fu-design-lab-v2");
+    window.localStorage.removeItem(SITE_STORAGE.legacyLab);
     replaceUserLab({ selections: { ...DEFAULT_SELECTIONS }, shortlists: { ...DEFAULT_SHORTLISTS }, notes: {} });
     updateUserPreferences({ density: DEFAULT_SETTINGS.density, reducedMotion: DEFAULT_SETTINGS.reducedMotion, toastDuration: DEFAULT_SETTINGS.toastDuration, effectIntensity: DEFAULT_SETTINGS.effectIntensity });
   };

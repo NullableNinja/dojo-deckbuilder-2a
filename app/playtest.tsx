@@ -1,3 +1,4 @@
+import { SITE_STORAGE } from "./storage-keys";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type SetStateAction } from "react";
 import cardPlaceholderUrl from "./assets/art/card-placeholder-v2.webp";
 import starterJabArtUrl from "./assets/starter/starter-jab-art-v2.webp";
@@ -45,6 +46,7 @@ import { resolveLocationHostEvent, structuredLocationDefenseForHost, structuredL
 import { createBossRuntimeState, resolveBossCardEvent } from "./boss-runtime.ts";
 import { GAME_MODES as CANONICAL_GAME_MODES } from "./canonical-presentation";
 import { readUserPreferences } from "./user-preferences";
+import { BOUT_HISTORY_KEY, boutSummary, countInventory, readBoutHistory, recordBout, type BoutRecord } from "./bout-notebook";
 
 /**
  * QUICK DUEL REACT SHELL
@@ -262,6 +264,7 @@ function characterRuntimePendingChoice(
 
 type Match = {
   schema: 8;
+  boutId?: string;
   rulesVersion: string;
   player: Board;
   ai: Board;
@@ -305,7 +308,7 @@ type GameModeId = (typeof CANONICAL_GAME_MODES)[number]["id"];
 type MatVfxKind = "attack" | "hit" | "block" | "combo" | "ko" | "brace" | "certified" | "promotion";
 type MatVfxEvent = { id: number; player?: MatVfxKind; ai?: MatVfxKind; screen?: "impact" | "scene"; cue: string; cueTone: "attack" | "damage" | "block" | "certified" | "promotion" | "summary"; announcement: string; xp?: { side: "player" | "ai"; amount: number }; promotion?: { side: "player" | "ai"; belt: string; previousBelt: string } };
 
-const BINDER_STORAGE_KEY = "dojo-binder-v1";
+const BINDER_STORAGE_KEY = SITE_STORAGE.binder;
 
 function readBinderIds() {
   if (typeof window === "undefined") return new Set<string>();
@@ -2933,9 +2936,11 @@ function MatLane({ label, cards: cardIds, activeId, onInspect }: { label: string
   </section>;
 }
 
-function SetupView({ selectedId, setSelectedId, settings, setSettings, begin, mode, setMode, goTo }: { selectedId: string; setSelectedId: (id: string) => void; settings: HouseSettings; setSettings: (settings: HouseSettings) => void; begin: () => void; mode: GameModeId; setMode: (mode: GameModeId) => void; goTo: (view: "rules" | "cards" | "quickstart") => void }) {
+function SetupView({ selectedId, setSelectedId, opponentId, setOpponentId, history, settings, setSettings, begin, mode, setMode, goTo }: { selectedId: string; setSelectedId: (id: string) => void; opponentId: string; setOpponentId: (id: string) => void; history: BoutRecord[]; settings: HouseSettings; setSettings: (settings: HouseSettings) => void; begin: () => void; mode: GameModeId; setMode: (mode: GameModeId) => void; goTo: (view: "rules" | "cards" | "quickstart") => void }) {
   const [query, setQuery] = useState("");
   const selected = cardFor(selectedId) ?? characters[0];
+  const rival = cardFor(opponentId);
+  const career = boutSummary(history);
   const filteredCharacters = characters.filter((character) => `${character.name} ${character.rulesText ?? ""} ${Object.values(character.stats).join(" ")}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const randomize = () => {
     const choices = filteredCharacters.filter((character) => character.id !== selectedId);
@@ -2946,19 +2951,19 @@ function SetupView({ selectedId, setSelectedId, settings, setSettings, begin, mo
   const toggleHouseRule = (id: string) => setSettings({ ...settings, houseRuleIds: settings.houseRuleIds.includes(id) ? settings.houseRuleIds.filter((entry) => entry !== id) : [...settings.houseRuleIds, id] });
   const selectedMode = CANONICAL_GAME_MODES.find((entry) => entry.id === mode) ?? CANONICAL_GAME_MODES[0];
   const modeMeta = GAME_MODE_META[mode];
-  return <main className="playtest-shell playtest-shell--setup shell paper-fu-game-gateway">
-    <section className="playtest-gateway-hero paper-stack">
-      <div><span className="version-pill"><span className="status-dot" /> Paper-Fu game desk / open</span><span className="eyebrow">Play the game / mode dispatch</span><h1>Choose your mat.<br /><em>Make it count.</em></h1><p>Every format starts here. Pick the kind of trouble you want to file, then we’ll hand you the right table, the right rules, and the right amount of dramatic paperwork.</p><div className="playtest-gateway-facts"><span><b>04</b> formats filed</span><span><b>{characters.length}</b> fighters on record</span><span><b>{starterIds.length}</b> cards to start</span></div></div><div className="playtest-gateway-stamp"><span>FORM 08</span><strong>OPEN<br />MAT</strong><small>Department of Competitive Safety</small></div>
-    </section>
-    <section className="play-mode-selector" aria-labelledby="play-mode-title">
+  return <main className="playtest-shell playtest-shell--setup shell paper-fu-game-gateway bout-lobby">
+    <section className="bout-billboard"><div><span className="eyebrow">Paper-Fu / Fight Night</span><h1>BIG MOVES.<br /><em>SMALL PRINT.</em></h1><p>A deck, a rival, and a deeply questionable waiver. Build the bout you want to play.</p></div><div className="bout-career" aria-label="Recent bout record"><span><b>{career.bouts}</b>BOUTS ON FILE</span><span><b>{career.wins}</b>WINS</span><span><b>{career.streak}</b>WIN STREAK</span><small>Last 30 finished bouts · saved on this device</small></div></section>
+    {mode === "quick-duel" && <section className="bout-matchup" aria-label="Choose your opponent"><div className="bout-matchup-fighter"><img src={fighterIllustrationUrl(selected) ?? artistUrl(selected) ?? cardPlaceholderUrl} alt="" /><div><label htmlFor="bout-fighter">YOUR FIGHTER</label><select id="bout-fighter" value={selectedId} onChange={event => setSelectedId(event.target.value)}>{characters.map(fighter => <option value={fighter.id} key={fighter.id}>{fighter.name}</option>)}</select><small>{numberValue(selected.stats.ATK)} ATK · {numberValue(selected.stats.DEF)} DEF · {numberValue(selected.stats.Speed)} SPD</small></div></div><b className="bout-vs" aria-hidden="true">VS</b><div className="bout-matchup-fighter"><img src={rival ? fighterIllustrationUrl(rival) ?? artistUrl(rival) ?? cardPlaceholderUrl : cardPlaceholderUrl} alt="" /><div><label htmlFor="bout-opponent">YOUR OPPONENT</label><select id="bout-opponent" value={opponentId} onChange={event => setOpponentId(event.target.value)}><option value="">Surprise me</option>{characters.map(fighter => <option value={fighter.id} key={fighter.id}>{fighter.name}</option>)}</select><small>{rival ? `${numberValue(rival.stats.ATK)} ATK · ${numberValue(rival.stats.DEF)} DEF · ${numberValue(rival.stats.Speed)} SPD` : "A random rival from the full roster."}</small></div></div><div className="bout-conditions"><label htmlFor="bout-difficulty">Rival difficulty<select id="bout-difficulty" value={settings.difficulty} onChange={event => setSettings({ ...settings, difficulty: event.target.value as Difficulty })}>{Object.entries(DIFFICULTIES).map(([value, option]) => <option value={value} key={value}>{option.label}</option>)}</select></label><span>{DIFFICULTIES[settings.difficulty].detail}</span></div><button type="button" className="button primary bout-start" onClick={() => begin()}>RING THE BELL ↗</button></section>}
+    {history.length > 0 && <section className="bout-recent" aria-label="Recent bouts"><span className="eyebrow">Last bouts on file</span><div>{history.slice(0, 3).map(record => <article key={record.id}><b className={record.won ? "bout-won" : "bout-lost"}>{record.won ? "WIN" : "LOSS"}</b><span><strong>{record.fighter}</strong> vs {record.opponent}</span><small>{record.rounds} rounds · {record.damage} damage · {record.belt} Belt</small></article>)}</div></section>}
+    <details className="bout-format-directory"><summary>Explore all four formats · Quick Duel is playable now</summary><section className="play-mode-selector" aria-labelledby="play-mode-title">
       <div className="play-mode-heading"><div><span className="eyebrow">01 / Select a format</span><h2 id="play-mode-title">What kind of trouble today?</h2></div><p>The game is bigger than Quick Duel. The current field test is only one door into the dojo.</p></div>
       <div className="play-mode-grid">{CANONICAL_GAME_MODES.map((entry, index) => { const meta = GAME_MODE_META[entry.id]; const active = mode === entry.id; return <button type="button" className={`play-mode-card paper-stack interactive-paper tone-${meta.tone}${active ? " is-active" : ""}${meta.live ? " is-live" : ""}`} onClick={() => setMode(entry.id)} aria-pressed={active} key={entry.id}><div className="play-mode-card-top"><span className="play-mode-number">0{index + 1}</span><span className="play-mode-status">{meta.status}</span></div><h3>{entry.title}</h3><p>{meta.hook}</p><div className="play-mode-spec"><span>{entry.players}</span><span>{entry.fighters}</span></div><footer><b>{entry.win}</b><span>{active ? "Selected for setup" : meta.live ? "Open field test" : "Preview the docket"} →</span></footer></button>; })}</div>
-    </section>
+    </section></details>
     {mode === "quick-duel" ? <section className="playtest-setup-grid playtest-quick-duel-setup" aria-labelledby="quick-duel-setup-title">
       <div className="playtest-roster paper-stack"><div className="setup-panel-heading"><div><span className="eyebrow">02 / Choose your fighter</span><h2 id="quick-duel-setup-title">Who signs the waiver?</h2><p>Tap a face. The dossier answers back.</p></div><div className="roster-toolbar-actions"><label><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a fighter" aria-label="Search fighters" /></label><button type="button" onClick={randomize}>Random draw <span>↻</span></button></div></div><article className="selected-fighter-dossier" key={selected.id}><div className="selected-fighter-art-wrap"><img src={fighterIllustrationUrl(selected) ?? artistUrl(selected) ?? cardPlaceholderUrl} alt={selected.name} /><span className="dossier-selection-mark">FILED</span></div><div className="selected-fighter-copy"><span className="selected-fighter-kicker">Selected delegation · {selected.cardType}</span><h3>{selected.name}</h3><p>{selected.rulesText ?? "Ability pending an inspector with a functioning pen."}</p><div className="selected-fighter-stats"><b>{numberValue(selected.stats.ATK)}<small>ATK</small></b><b>{numberValue(selected.stats.DEF)}<small>DEF</small></b><b>{numberValue(selected.stats.Speed)}<small>SPD</small></b></div><span className="selection-receipt" aria-live="polite">{selected.name} is cleared for the mat.</span></div></article><div className="character-roster-heading"><span>Character cabinet</span><small>{filteredCharacters.length} faces match the current search</small></div><div className="playtest-character-grid">{filteredCharacters.map((character) => <button type="button" key={character.id} className={selectedId === character.id ? "is-selected" : ""} onClick={() => chooseCharacter(character.id)} aria-pressed={selectedId === character.id}><span className="character-card-tape" aria-hidden="true" /><span className="character-card-image"><img src={fighterIllustrationUrl(character) ?? artistUrl(character) ?? cardPlaceholderUrl} alt="" loading="lazy" /></span><span className="character-card-name">{character.name}</span><small>{numberValue(character.stats.ATK)} ATK · {numberValue(character.stats.DEF)} DEF · {numberValue(character.stats.Speed)} SPD</small>{selectedId === character.id && <b className="character-card-check" aria-hidden="true">✓</b>}</button>)}</div></div>
       <aside className="playtest-rules-panel quick-duel-brief paper-stack"><div className="brief-panel-top"><span className="eyebrow">03 / Field test settings</span><span className="brief-panel-seal">LIVE</span></div><h2>{selectedMode.title}</h2><p>One fighter. One tactical opponent. A complete {starterIds.length}-card curriculum, persistent Market, Locations, Reversals, Combos, and Belt progression.</p><div className="brief-panel-callout"><b>{DIFFICULTIES[settings.difficulty].eyebrow}</b><span>{DIFFICULTIES[settings.difficulty].detail}</span></div><div className="playtest-setup-options"><label><span>Opponent filing</span><select value={settings.difficulty} onChange={(event) => setSettings({ ...settings, difficulty: event.target.value as Difficulty })}>{Object.entries(DIFFICULTIES).map(([value, option]) => <option value={value} key={value}>{option.label}</option>)}</select></label><label><span>Combat motion</span><select value={settings.motion} onChange={(event) => setSettings({ ...settings, motion: event.target.value as MotionMode })}><option value="full">Full impact</option><option value="reduced">Reduced impact</option><option value="off">Off</option></select></label><label className="playtest-setup-check"><input type="checkbox" checked={settings.guided} onChange={(event) => setSettings({ ...settings, guided: event.target.checked })} /><span>Start with Decision Coach</span></label></div><fieldset className="playtest-house-rules"><legend>Optional house rules</legend><p>Only variants the current Quick Duel engine can enforce for both sides appear here.</p>{QUICK_DUEL_HOUSE_RULES.map((rule) => <label className="playtest-house-rule-option" key={rule.id}><input type="checkbox" checked={settings.houseRuleIds.includes(rule.id)} onChange={() => toggleHouseRule(rule.id)} /><span><b>{rule.name}</b><small>{rule.summary || rule.rule}</small></span></label>)}</fieldset><ul><li>Playable on desktop and tablet</li><li>{cards.length} approved records in the cabinet</li><li>Progress saved on this device</li></ul><button type="button" className="button primary field-test-launch" onClick={() => begin()}>Open the Quick Duel mat <span>→</span></button></aside>
     </section> : <section className="mode-briefing-card paper-stack" aria-live="polite"><div className={`mode-briefing-mark tone-${modeMeta.tone}`}><span>0{CANONICAL_GAME_MODES.findIndex((entry) => entry.id === mode) + 1}</span><b>FILED</b></div><div><span className="eyebrow">02 / Mode briefing</span><h2>{selectedMode.title}</h2><p>{selectedMode.detail || modeMeta.hook}</p><div className="mode-briefing-facts"><span><b>{selectedMode.players}</b> table size</span><span><b>{selectedMode.fighters}</b> roster load</span><span><b>{selectedMode.win}</b> victory condition</span></div><button type="button" className="button ghost" onClick={() => goTo("quickstart")}>Read the full mode brief <span>→</span></button></div><aside><span>Next filing</span><strong>{mode === "boss-blitz" ? "Boss room construction" : "Dedicated table build"}</strong><p>This format is documented and queued for the expanded game surface.</p><button type="button" className="text-link" onClick={() => setMode("quick-duel")}>Play Quick Duel while it’s live →</button></aside></section>}
-    <footer className="playtest-gateway-footer"><span><b>Department note:</b> Mode selection is now the front door. The engine underneath remains the canonical Quick Duel implementation.</span><button type="button" className="text-link" onClick={() => goTo("rules")}>Check the rules before entering →</button></footer>
+    <footer className="playtest-gateway-footer"><span><b>Department note:</b> Choose your fighter, name your rival, and ring the bell. Every finished bout goes on your record.</span><button type="button" className="text-link" onClick={() => goTo("rules")}>Check the rules before entering →</button></footer>
   </main>;
 }
 
@@ -2975,18 +2980,22 @@ function MobilePlaytestNotice() {
 
 export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" | "quickstart") => void }) {
   const [selectedId, setSelectedId] = useState(() => characters.find((card) => card.name === "Sensei Ducktape")?.id ?? characters[0].id);
+  const [opponentId, setOpponentId] = useState("");
+  const [history, setHistory] = useState<BoutRecord[]>(() => { try { return readBoutHistory(window.localStorage.getItem(BOUT_HISTORY_KEY)); } catch { return []; } });
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryTab, setInventoryTab] = useState<"collection" | "discard" | "equipment">("collection");
   const [agentName] = useState(() => {
     const name = readUserPreferences().displayName;
     return name === "Paper-Fu Agent" ? "Field Agent" : name;
   });
   const [mode, setMode] = useState<GameModeId>(() => {
-    const saved = window.localStorage.getItem("ddb-selected-game-mode");
+    const saved = window.localStorage.getItem(SITE_STORAGE.gameMode);
     return CANONICAL_GAME_MODES.some((entry) => entry.id === saved) ? saved as GameModeId : "quick-duel";
   });
   const [settings, setSettings] = useState<HouseSettings>(() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem("ddb-field-settings") ?? "null") as Partial<HouseSettings> | null;
-      const storedMotion = window.localStorage.getItem("ddb-vfx-mode");
+      const saved = JSON.parse(window.localStorage.getItem(SITE_STORAGE.settings) ?? "null") as Partial<HouseSettings> | null;
+      const storedMotion = window.localStorage.getItem(SITE_STORAGE.motion);
       const motion = saved?.motion ?? (storedMotion === "reduced" || storedMotion === "off" ? storedMotion : "full");
       return { tempo: saved?.tempo ?? true, locations: saved?.locations ?? true, openMarket: saved?.openMarket ?? true, guided: saved?.guided ?? true, autoAi: saved?.autoAi ?? true, balancedMarket: saved?.balancedMarket ?? true, difficulty: saved?.difficulty && DIFFICULTIES[saved.difficulty] ? saved.difficulty : "certified", motion, houseRuleIds: sanitizeQuickDuelHouseRuleIds(saved?.houseRuleIds) };
     } catch { return { tempo: true, locations: true, openMarket: true, guided: true, autoAi: true, balancedMarket: true, difficulty: "certified", motion: "full", houseRuleIds: [] }; }
@@ -2994,7 +3003,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
   const beltThresholds = useMemo(() => effectiveBeltThresholds(belts, settings.houseRuleIds), [settings.houseRuleIds]);
   const [match, setRawMatch] = useState<Match | null>(() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem("ddb-field-match") ?? "null") as Match | null;
+      const saved = JSON.parse(window.localStorage.getItem(SITE_STORAGE.match) ?? "null") as Match | null;
       const validSavedMatch = saved?.schema === 8 && saved?.player?.fighterId && saved?.ai?.fighterId && saved.turnOrder?.length === 2 && cardFor(saved.player.fighterId) && cardFor(saved.ai.fighterId) ? saved : null;
       if (!validSavedMatch) return null;
       const normalized = normalizePendingDamageChoice(validSavedMatch);
@@ -3028,7 +3037,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
   const [resetOpen, setResetOpen] = useState(false);
   const [deskView, setDeskView] = useState<DeskView | null>(() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem("ddb-field-match") ?? "null") as Match | null;
+      const saved = JSON.parse(window.localStorage.getItem(SITE_STORAGE.match) ?? "null") as Match | null;
       return saved?.phase === "player-ascend" ? "market" : null;
     } catch { return null; }
   });
@@ -3056,11 +3065,19 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
 }, [deskView]);
   const [rulesSync, setRulesSync] = useState<RulesSyncState>({ status: "checking", currentVersion: activeRulesRevision, latestVersion: activeRulesRevision, checkedAt: 0 });
   const inspected = inspectedId ? cardFor(inspectedId) : null;
+  useEffect(() => {
+    if (!match?.winner) return;
+    const record: BoutRecord = { id: match.boutId ?? `legacy-${match.player.fighterId}-${match.ai.fighterId}-${match.round}-${match.player.damageDealt}`, finishedAt: Date.now(), fighter: cardFor(match.player.fighterId)?.name ?? "Your fighter", opponent: cardFor(match.ai.fighterId)?.name ?? "Opponent", won: match.winner === "player", rounds: match.round, damage: match.player.damageDealt, purchases: match.player.cardsBought, belt: belts[match.player.belt].name };
+    setHistory(previous => recordBout(previous, record));
+  }, [match?.winner, match?.boutId]);
+  useEffect(() => {
+    try { window.localStorage.setItem(BOUT_HISTORY_KEY, JSON.stringify(history)); } catch { /* A blocked store must not interrupt play. */ }
+  }, [history]);
 
   useEffect(() => {
     const previous = previousMatchRef.current;
     previousMatchRef.current = match;
-    if (!match || !previous) return;
+    if (!match || !previous || match.boutId !== previous.boutId) return;
 
     const exchange = match.lastExchange;
     const playerXpGain = Math.max(0, match.player.xp - previous.player.xp);
@@ -3124,18 +3141,18 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
   }, [match]);
 
   useEffect(() => {
-    window.localStorage.setItem("ddb-field-settings", JSON.stringify(settings));
-    window.localStorage.setItem("ddb-vfx-mode", settings.motion);
+    window.localStorage.setItem(SITE_STORAGE.settings, JSON.stringify(settings));
+    window.localStorage.setItem(SITE_STORAGE.motion, settings.motion);
   }, [settings]);
   useEffect(() => {
-    window.localStorage.setItem("ddb-selected-game-mode", mode);
+    window.localStorage.setItem(SITE_STORAGE.gameMode, mode);
   }, [mode]);
   useEffect(() => {
     try {
-      if (match) window.localStorage.setItem("ddb-field-match", JSON.stringify(match));
-      else window.localStorage.removeItem("ddb-field-match");
+      if (match) window.localStorage.setItem(SITE_STORAGE.match, JSON.stringify(match));
+      else window.localStorage.removeItem(SITE_STORAGE.match);
     } catch {
-      window.localStorage.removeItem("ddb-field-match");
+      window.localStorage.removeItem(SITE_STORAGE.match);
     }
   }, [match]);
   useEffect(() => {
@@ -3152,7 +3169,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
   }, []);
   useEffect(() => {
     setInspectorZoomed(false);
-    const hasDialog = Boolean(inspectedId || deskView || logOpen || coachOpen || receiptOpen || resetOpen);
+    const hasDialog = Boolean(inspectedId || deskView || logOpen || coachOpen || receiptOpen || resetOpen || inventoryOpen);
     if (!hasDialog) {
       dialogRestoreRef.current?.focus();
       dialogRestoreRef.current = null;
@@ -3163,6 +3180,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (inspectedId) setInspectedId(null);
+        else if (inventoryOpen) setInventoryOpen(false);
         else if (deskView) setDeskView(null);
         else if (logOpen) setLogOpen(false);
         else if (receiptOpen) setReceiptOpen(false);
@@ -3201,13 +3219,14 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
       }
     });
     return () => { window.cancelAnimationFrame(focusFrame); document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", close); };
-  }, [inspectedId, deskView, logOpen, coachOpen, receiptOpen, resetOpen]);
+  }, [inspectedId, deskView, logOpen, coachOpen, receiptOpen, resetOpen, inventoryOpen]);
 
-  const begin = (fighterId = selectedId) => {
+  const begin = (fighterId = selectedId, requestedRivalId = opponentId) => {
     const choices = characters.filter((card) => card.id !== fighterId);
     const player = { ...emptyBoard(fighterId), xp: 1 };
     const challenge = DIFFICULTIES[settings.difficulty];
-    const ai = { ...emptyBoard(choices[Math.floor(Math.random() * choices.length)].id), xp: 1, hp: challenge.aiHp, maxHp: challenge.aiHp, statBoost: challenge.statBoost };
+    const rivalId = cardFor(requestedRivalId)?.cardType === "Character" ? requestedRivalId : choices[Math.floor(Math.random() * choices.length)].id;
+    const ai = { ...emptyBoard(rivalId), xp: 1, hp: challenge.aiHp, maxHp: challenge.aiHp, statBoost: challenge.statBoost };
     const locations = shuffle(quickDuelLocationPool.map((card) => card.id));
     const shuffledMarket = shuffle(marketPool.filter((card) => settings.openMarket || Boolean(artistUrl(card))).map((card) => card.id));
     const openingMarket = curateOpeningMarket(shuffledMarket, settings.balancedMarket);
@@ -3216,7 +3235,9 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
     const playerFirst = fighterStat(player, "Speed") >= fighterStat(ai, "Speed");
     const turnOrder: Match["turnOrder"] = playerFirst ? ["player", "ai"] : ["ai", "player"];
     setDeskView(null);
-    setMatch({ schema: 8, rulesVersion: activeRulesRevision, player, ai, market: openingMarket.market, marketDeck: openingMarket.marketDeck, marketDiscard: [], marketPurchasedThisRound: false, comboDeck: comboDeck.slice(1), comboOfferId: comboDeck[0] ?? null, locations: locations.slice(1), locationId: currentLocation, round: 1, phase: playerFirst ? "player-initiate" : "ai-ready", turnOrder, turnIndex: 0, selectedAttackId: null, selectedZone: "High", pendingStrike: null, pendingDiscard: null, pendingChoice: null, pendingCombatContinuation: null, reversalRemainingAiAttacks: [], reversalReason: null, reversalIncomingZone: null, attackCostDecisionCardId: null, nonHonorSceneChangedThisRound: false, exchangeSequence: 0, lastExchange: null, winner: null, log: [`${challenge.label} field test opened under rules ${activeRulesRevision}. The waiver is legally adjacent to complete.`, `Honor 1: ${cardFor(currentLocation)?.name ?? "Tournament Mat"} is active. Both fighters gain 1 XP and refresh Tempo.`, `${playerFirst ? "You" : "Computer"} win initiative on current Speed.`] });
+    setMatVfx(null);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    setMatch({ schema: 8, boutId: crypto.randomUUID(), rulesVersion: activeRulesRevision, player, ai, market: openingMarket.market, marketDeck: openingMarket.marketDeck, marketDiscard: [], marketPurchasedThisRound: false, comboDeck: comboDeck.slice(1), comboOfferId: comboDeck[0] ?? null, locations: locations.slice(1), locationId: currentLocation, round: 1, phase: playerFirst ? "player-initiate" : "ai-ready", turnOrder, turnIndex: 0, selectedAttackId: null, selectedZone: "High", pendingStrike: null, pendingDiscard: null, pendingChoice: null, pendingCombatContinuation: null, reversalRemainingAiAttacks: [], reversalReason: null, reversalIncomingZone: null, attackCostDecisionCardId: null, nonHonorSceneChangedThisRound: false, exchangeSequence: 0, lastExchange: null, winner: null, log: [`${challenge.label} field test opened under rules ${activeRulesRevision}. The waiver is legally adjacent to complete.`, `Honor 1: ${cardFor(currentLocation)?.name ?? "Tournament Mat"} is active. Both fighters gain 1 XP and refresh Tempo.`, `${playerFirst ? "You" : "Computer"} win initiative on current Speed.`] });
   };
 
   const write = (current: Match, line: string, changes: Partial<Match> = {}) => ({ ...current, ...changes, log: [line, ...current.log].slice(0, 32) });
@@ -4768,7 +4789,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
     else if (!isPermanent(card)) playSupport(id);
   };
 
-  if (!match || !player || !ai || !playerFighter || !aiFighter) return <SetupView selectedId={selectedId} setSelectedId={setSelectedId} settings={settings} setSettings={setSettings} begin={begin} mode={mode} setMode={setMode} goTo={goTo} />;
+  if (!match || !player || !ai || !playerFighter || !aiFighter) return <SetupView selectedId={selectedId} setSelectedId={setSelectedId} opponentId={opponentId} setOpponentId={setOpponentId} history={history} settings={settings} setSettings={setSettings} begin={begin} mode={mode} setMode={setMode} goTo={goTo} />;
   const pendingAttack = match.selectedAttackId ? cardFor(match.selectedAttackId) : null;
   const currentLocation = cardFor(match.locationId);
   const comboOffer = match.comboOfferId ? cardFor(match.comboOfferId) : null;
@@ -4940,7 +4961,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
     {match.phase === "ai-ready" && !settings.autoAi && <button onClick={runAiTurn}>Run computer turn →</button>}
   </nav>;
 
-  return <main className={`playtest-shell playtest-shell--live location-${locationTheme(currentLocation)} motion-${settings.motion} ${settings.guided ? "playtest-shell--guided" : ""} ${match.winner ? "playtest-shell--finished" : ""}${matVfx?.screen === "impact" ? " ddb-vfx-screen-impact" : ""}${matVfx?.screen === "scene" ? " ddb-vfx-scene" : ""}${matVfx?.screen === "impact" ? ` ddb-vfx-screen-v${matVfx.id % 5}` : ""} shell`}>
+  return <main className={`playtest-shell playtest-shell--live bout-theater location-${locationTheme(currentLocation)} motion-${settings.motion} ${settings.guided ? "playtest-shell--guided" : ""} ${match.winner ? "playtest-shell--finished" : ""}${matVfx?.screen === "impact" ? " ddb-vfx-screen-impact" : ""}${matVfx?.screen === "scene" ? " ddb-vfx-scene" : ""}${matVfx?.screen === "impact" ? ` ddb-vfx-screen-v${matVfx.id % 5}` : ""} shell`}>
     {matVfx && <><div className="playtest-vfx-layer" aria-hidden="true"><div className={`playtest-vfx-cue playtest-vfx-cue--combat playtest-vfx-cue--${matVfx.cueTone}`} key={matVfx.id}><strong>{matVfx.cue}</strong><small>{matVfx.announcement}</small></div>{matVfx.xp && <div className={`playtest-xp-pop playtest-xp-pop--${matVfx.xp.side}`} key={`xp-${matVfx.id}`}>+{matVfx.xp.amount} XP</div>}{matVfx.promotion && <div className={`playtest-belt-promotion playtest-belt-promotion--${matVfx.promotion.side}`} key={`promotion-${matVfx.id}`}><span>{matVfx.promotion.side === "player" ? "CERTIFICATION APPROVED" : "OPPONENT FILING"}</span><strong>{matVfx.promotion.belt} BELT</strong><small>{matVfx.promotion.previousBelt} → {matVfx.promotion.belt} · {matVfx.promotion.side === "player" ? "Your rank has advanced." : "The paperwork got taller."}</small></div>}</div><div className="playtest-vfx-announcer" role="status" aria-live="polite">{matVfx.announcement}</div></>}
 
     <header className="playtest-topbar battle-versus-hud">
@@ -4965,11 +4986,11 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
         <div className="victory-stamp"><span>{match.winner === "player" ? "VICTORY" : "CLOSED"}</span><b>{match.winner === "player" ? "CERTIFIED" : "FIELD TEST"}</b></div>
         <div className="victory-fighter">
           <div className="victory-art-frame">{winnerArt ? <img src={winnerArt} alt={winnerFighter.name} /> : <NativeCardArt card={winnerFighter} />}<span>{match.winner === "player" ? "OFFICIAL WINNER" : "OFFICIAL PROBLEM"}</span></div>
-          <div className="victory-copy"><span className="eyebrow">Department of Questionably Regulated Martial Arts</span><h2>{match.winner === "player" ? `${winnerFighter.name} remains standing!` : `${winnerFighter.name} wins the field test.`}</h2><p>{match.winner === "player" ? "Confetti has been authorized, the clipboard has been impressed against its will, and your victory has been filed in triplicate." : "The result has been stamped, disputed, and filed beneath a suspicious vending-machine receipt. An immediate rematch remains irresponsibly available."}</p><strong>{match.winner === "player" ? "CERTIFICATE OF EXCESSIVE COMPETENCE" : "NOTICE OF TEMPORARY MARTIAL INCONVENIENCE"}</strong></div>
+          <div className="victory-copy"><span className="eyebrow">Department of Questionably Regulated Martial Arts</span><h2>{match.winner === "player" ? `${winnerFighter.name} remains standing!` : `${winnerFighter.name} takes the bout.`}</h2><p>{match.winner === "player" ? "Confetti has been authorized, the clipboard has been impressed against its will, and your victory has been filed in triplicate." : "The result has been stamped, disputed, and filed beneath a suspicious vending-machine receipt. An immediate rematch remains irresponsibly available."}</p><strong>{match.winner === "player" ? "CERTIFICATE OF EXCESSIVE COMPETENCE" : "NOTICE OF TEMPORARY MARTIAL INCONVENIENCE"}</strong></div>
         </div>
         <dl className="match-report"><div><dt>{match.round}</dt><dd>Rounds survived</dd></div><div><dt>{player.damageDealt}</dt><dd>Damage dealt</dd></div><div><dt>{player.cardsBought}</dt><dd>Cards acquired</dd></div><div><dt>{player.learnedCombos.length}</dt><dd>Combos learned</dd></div></dl>
         {match.lastExchange && <section className="victory-last-exchange" aria-label="Last recorded exchange"><div><span>Last exchange on file</span><strong>{cardFor(match.lastExchange.attackCardId)?.name ?? "Attack"} · {match.lastExchange.zone}</strong><p>{match.lastExchange.actor === "player" ? "You attacked" : "The computer attacked"} {match.lastExchange.defenseCardId ? `against ${cardFor(match.lastExchange.defenseCardId)?.name ?? "a Defense"}` : "against standing defense"}.</p></div><b>{match.lastExchange.attackPower} <small>ATK</small> vs {match.lastExchange.defensePower} <small>DEF</small> → {match.lastExchange.damage} <small>HP</small></b></section>}
-        <div className="victory-certificate-footer"><div className="victory-signature"><span>Certified by</span><b>Assistant Deputy Sensei, Filing Division</b><small>No one verified this signature.</small></div><div className="match-result-actions"><button className="button primary" onClick={() => begin(player.fighterId)}>Instant rematch →</button><button className="button ghost" onClick={() => setMatch(null)}>Choose another fighter</button></div></div>
+        <p className="bout-result-record" role="status">Result filed on this device · {boutSummary(history).wins} {boutSummary(history).wins === 1 ? "win" : "wins"} in {history.length} {history.length === 1 ? "bout" : "bouts"} · {boutSummary(history).streak} win streak</p><div className="victory-certificate-footer"><div className="victory-signature"><span>Certified by</span><b>Assistant Deputy Sensei, Filing Division</b><small>No one verified this signature.</small></div><div className="match-result-actions"><button className="button primary" onClick={() => begin(player.fighterId, ai.fighterId)}>Instant rematch →</button><button className="button ghost" onClick={() => setMatch(null)}>Choose another fighter</button></div></div>
       </div>
     </section>}
     <section className="playtest-arena">{settings.houseRuleIds.length > 0 && <div className="playtest-active-variants"><b>House rules active:</b>{QUICK_DUEL_HOUSE_RULES.filter((rule) => settings.houseRuleIds.includes(rule.id)).map((rule) => <span key={rule.id}>{rule.name}</span>)}</div>}
@@ -4985,7 +5006,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
     </section>
     <section className="playtest-workspace playtest-workspace--hand">
       <section className="hand-panel paper-stack" id="quick-duel-hand">
-        <header><div><span className="eyebrow">Your hand · {player.hand.length} cards</span><h2>{match.pendingChoice ? "Resolve the Equipment decision" : match.pendingDiscard ? `Choose ${match.pendingDiscard.remaining} card to discard` : match.phase === "player-initiate" ? "Equip before the yelling starts" : match.phase === "defense-window" ? `Defend ${match.pendingStrike?.zone} or let it land` : match.phase === "reversal-window" ? "Return the favor immediately" : "Choose your next card"}</h2></div><div className="hand-counters"><span>Deck {player.deck.length}</span><span>Discard {player.discard.length}</span><span>Attacks played {player.attacksThisTurn}</span><span>Flow {player.flowUsedThisTurn ? "used" : "ready"}</span><span>Practice {player.defensePracticeUsed ? "used" : "ready"}</span><span>Habit {player.badHabitFocusUsed ? "used" : "ready"}</span></div>{phaseActionDock}</header>
+        <header><div><span className="eyebrow">Your hand · {player.hand.length} cards</span><h2>{match.pendingChoice ? "Resolve the Equipment decision" : match.pendingDiscard ? `Choose ${match.pendingDiscard.remaining} card to discard` : match.phase === "player-initiate" ? "Equip before the yelling starts" : match.phase === "defense-window" ? `Defend ${match.pendingStrike?.zone} or let it land` : match.phase === "reversal-window" ? "Return the favor immediately" : "Choose your next card"}</h2></div><div className="hand-counters"><button type="button" onClick={() => { setInventoryTab("collection"); setInventoryOpen(true); }}>Deck · {player.deck.length}</button><button type="button" onClick={() => { setInventoryTab("discard"); setInventoryOpen(true); }}>Discard · {player.discard.length}</button><span>Attacks played {player.attacksThisTurn}</span><span>Flow {player.flowUsedThisTurn ? "used" : "ready"}</span><span>Practice {player.defensePracticeUsed ? "used" : "ready"}</span><span>Habit {player.badHabitFocusUsed ? "used" : "ready"}</span></div>{phaseActionDock}</header>
         {match.pendingDiscard && <div className="discard-choice-notice" role="status"><b>{cardFor(match.pendingDiscard.sourceCardId)?.name}</b><span>Select the card you want to discard. The engine will not choose for you.</span></div>}
         {equipmentReactions.length > 0 && <div className="equipment-reaction-strip" aria-label="Available Equipment reactions"><span>Equipment reactions</span>{equipmentReactions.map((item) => <button type="button" disabled={Boolean(match.pendingChoice)} onClick={() => activateEquipment(item.id)} key={item.id}><b>Exhaust {item.name}</b><small>{equipmentActivationSummary(item)}</small></button>)}</div>}
         {equipmentActions.length > 0 && <div className="equipment-reaction-strip equipment-trigger-strip" aria-label="Available Equipment actions"><span>Equipment actions</span>{equipmentActions.map((item) => <button type="button" disabled={Boolean(match.pendingChoice)} onClick={() => activateEquipment(item.id)} key={item.id}><b>Exhaust {item.name}</b><small>{equipmentActivationSummary(item)}</small></button>)}</div>}
@@ -5019,9 +5040,10 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
       </section>
     </section>
     <footer className="playtest-utility-dock" aria-label="Quick Duel utilities">
-      <div className="playtest-utility-group"><button type="button" className={`utility-coach ${settings.guided ? "" : "is-off"}`} onClick={() => { if (!settings.guided) setSettings({ ...settings, guided: true }); setCoachOpen(true); }}>{settings.guided ? "Decision Coach" : "Coach Off · Re-enable"}</button>{match.lastExchange && !match.winner && <button type="button" onClick={() => setReceiptOpen(true)}>Explain last exchange</button>}<button type="button" onClick={() => setLogOpen(true)}>Fight Log <b>{match.log.length}</b></button><label className="utility-motion"><span>Motion</span><select value={settings.motion} onChange={(event) => setSettings({ ...settings, motion: event.target.value as MotionMode })}><option value="full">Full</option><option value="reduced">Reduced</option><option value="off">Off</option></select></label></div>
+      <div className="playtest-utility-group"><button type="button" onClick={() => setInventoryOpen(true)}>Deck notebook</button><button type="button" className={`utility-coach ${settings.guided ? "" : "is-off"}`} onClick={() => { if (!settings.guided) setSettings({ ...settings, guided: true }); setCoachOpen(true); }}>{settings.guided ? "Decision Coach" : "Coach Off · Re-enable"}</button>{match.lastExchange && !match.winner && <button type="button" onClick={() => setReceiptOpen(true)}>Explain last exchange</button>}<button type="button" onClick={() => setLogOpen(true)}>Fight Log <b>{match.log.length}</b></button><label className="utility-motion"><span>Motion</span><select value={settings.motion} onChange={(event) => setSettings({ ...settings, motion: event.target.value as MotionMode })}><option value="full">Full</option><option value="reduced">Reduced</option><option value="off">Off</option></select></label></div>
       <div className="playtest-utility-group playtest-utility-group--nav"><span className={`rules-sync rules-sync--${rulesSync.status}`}>{rulesSync.status === "update-available" ? `Rules ${rulesSync.latestVersion} ready` : rulesSync.status === "offline" ? "Rules offline" : "Rules synced"}</span>{rulesSync.status === "update-available" && <button onClick={() => window.location.reload()}>Reload</button>}<button onClick={() => setResetOpen(true)}>New Duel</button><button onClick={() => goTo("rules")}>Rules</button><button onClick={() => goTo("cards")}>Cards</button></div>
     </footer>
+    {inventoryOpen && <div className="playtest-inspector-backdrop notebook-backdrop" onMouseDown={event => event.target === event.currentTarget && setInventoryOpen(false)}><section className="deck-notebook paper-stack" role="dialog" aria-modal="true" aria-labelledby="notebook-title"><button type="button" className="modal-close" onClick={() => setInventoryOpen(false)} aria-label="Close deck notebook">×</button><span className="eyebrow">Your evolving deck / inspection only</span><h2 id="notebook-title">Know your paper.</h2><p>Every card you own, grouped by name. Draw order stays hidden.</p><div className="notebook-tabs" role="group" aria-label="Notebook section">{(["collection", "discard", "equipment"] as const).map(tab => <button type="button" aria-pressed={inventoryTab === tab} key={tab} onClick={() => setInventoryTab(tab)}>{tab === "collection" ? "All your cards" : tab === "discard" ? `Discard · ${player.discard.length}` : `Equipment · ${player.equipment.length}`}</button>)}</div><div className="notebook-cards">{countInventory(inventoryTab === "discard" ? player.discard : inventoryTab === "equipment" ? player.equipment : [...player.deck, ...player.hand, ...player.discard, ...player.playArea.filter(id => !player.equipment.includes(id)), ...player.equipment]).map(({id,count}) => { const card = cardFor(id); return card && <button type="button" key={id} onClick={() => { setInventoryOpen(false); setInspectedId(id); }}><span className="notebook-art">{artistUrl(card) ? <img src={artistUrl(card)} alt="" /> : <NativeCardArt card={card} />}</span><b>{card.name}</b><small>{count} {count === 1 ? "copy" : "copies"} · {card.subtype || card.cardType}</small></button>; })}</div>{inventoryTab !== "collection" && !(inventoryTab === "discard" ? player.discard : player.equipment).length && <p className="notebook-empty">No cards here yet. The notebook updates as you play.</p>}</section></div>}
     {deskView && <div className="ascend-desk-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setDeskView(null)}>
       <section className={`ascend-desk paper-stack ${match.phase === "player-ascend" ? "ascend-desk--functional" : ""}`} role="dialog" aria-modal="true" aria-labelledby="ascend-desk-title">
         <header className="ascend-desk-header">
