@@ -4948,12 +4948,17 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
         <span><small>YOU · {playerFighter.name}</small></span><b>{agentName}</b>
         <div><strong>{player.hp}<small> HP</small></strong><i role="progressbar" aria-label={`${playerFighter.name} health`} aria-valuemin={0} aria-valuemax={player.maxHp} aria-valuenow={player.hp}><em style={{ width: `${playerHpPercent}%` }} /></i></div>
       </div>
-      <div className="versus-center" aria-label={`Round ${match.round}`}><span>ROUND</span><b>{match.round}</b></div>
+      <div className="versus-center" aria-label={`Round ${match.round}`}><span>ROUND</span><b>{match.round}</b><small>{match.winner ? "FINAL" : match.phase === "defense-window" ? "DEFEND" : match.phase === "reversal-window" ? "REVERSAL" : match.phase === "player-initiate" ? "INITIATE" : match.phase === "player-yell" ? "YELL" : match.phase === "player-ascend" ? "ASCEND" : "OPPONENT"}</small></div>
       <div className={`battle-hud-fighter battle-hud-fighter--ai hp-tier-${healthTier(ai.hp, ai.maxHp)}`} style={{ "--hp-progress": `${aiHpPercent}%` } as CSSProperties}>
         <span><small>COMPUTER · {aiFighter.name}</small></span><b>COMPUTER</b>
         <div><strong>{ai.hp}<small> HP</small></strong><i role="progressbar" aria-label={`${aiFighter.name} health`} aria-valuemin={0} aria-valuemax={ai.maxHp} aria-valuenow={ai.hp}><em style={{ width: `${aiHpPercent}%` }} /></i></div>
       </div>
     </header>
+    {!match.winner && <section className="fight-brief" aria-label="Current decision">
+      <div className="fight-brief-copy"><span>FIGHT DESK / CURRENT DECISION</span><strong>{match.pendingDiscard ? "Choose a card to discard." : match.phase === "defense-window" ? (defenseOptions.length ? `A ${match.pendingStrike?.zone} strike is coming. Choose a matching Defense or pass.` : `A ${match.pendingStrike?.zone} strike is coming. No matching Defense in hand; standing DEF still applies.`) : match.phase === "reversal-window" ? "Choose an Attack for your Reversal, or decline." : match.phase === "player-initiate" ? "Equip your permanent gear, then proceed to Yell." : match.phase === "player-yell" ? (pendingAttack ? `${pendingAttack.name} is selected. Confirm its zone and declare it.` : "Play cards from your hand, or proceed to Ascend.") : match.phase === "player-ascend" ? "Spend Focus, consider a Combo, and check your Belt." : "The computer is taking its turn."}</strong></div>
+      {phaseActionDock}
+      <button type="button" className="fight-brief-hand" onClick={() => document.getElementById("quick-duel-hand")?.scrollIntoView({ block: "start" })}>YOUR HAND ↓</button>
+    </section>}
     {match.winner && <section className={`match-result paper-stack ${match.winner === "player" ? "is-victory" : "is-defeat"}`}>
       {match.winner === "player" && <div className="victory-confetti" aria-hidden="true">{Array.from({ length: 44 }, (_, index) => <i className={`confetti-bit confetti-bit--${["action", "brass", "guard", "violet", "blue", "paper"][index % 6]}`} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 11) * .09}s`, animationDuration: `${2.35 + (index % 7) * .18}s`, "--confetti-drift": `${((index % 9) - 4) * 12}px` } as CSSProperties} key={index} />)}</div>}
       <div className="victory-certificate">
@@ -4979,7 +4984,7 @@ export default function PlaytestView({ goTo }: { goTo: (view: "rules" | "cards" 
       </section>
     </section>
     <section className="playtest-workspace playtest-workspace--hand">
-      <section className="hand-panel paper-stack">
+      <section className="hand-panel paper-stack" id="quick-duel-hand">
         <header><div><span className="eyebrow">Your hand · {player.hand.length} cards</span><h2>{match.pendingChoice ? "Resolve the Equipment decision" : match.pendingDiscard ? `Choose ${match.pendingDiscard.remaining} card to discard` : match.phase === "player-initiate" ? "Equip before the yelling starts" : match.phase === "defense-window" ? `Defend ${match.pendingStrike?.zone} or let it land` : match.phase === "reversal-window" ? "Return the favor immediately" : "Choose your next card"}</h2></div><div className="hand-counters"><span>Deck {player.deck.length}</span><span>Discard {player.discard.length}</span><span>Attacks played {player.attacksThisTurn}</span><span>Flow {player.flowUsedThisTurn ? "used" : "ready"}</span><span>Practice {player.defensePracticeUsed ? "used" : "ready"}</span><span>Habit {player.badHabitFocusUsed ? "used" : "ready"}</span></div>{phaseActionDock}</header>
         {match.pendingDiscard && <div className="discard-choice-notice" role="status"><b>{cardFor(match.pendingDiscard.sourceCardId)?.name}</b><span>Select the card you want to discard. The engine will not choose for you.</span></div>}
         {equipmentReactions.length > 0 && <div className="equipment-reaction-strip" aria-label="Available Equipment reactions"><span>Equipment reactions</span>{equipmentReactions.map((item) => <button type="button" disabled={Boolean(match.pendingChoice)} onClick={() => activateEquipment(item.id)} key={item.id}><b>Exhaust {item.name}</b><small>{equipmentActivationSummary(item)}</small></button>)}</div>}

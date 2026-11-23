@@ -386,17 +386,23 @@ function DetailModal({ eyebrow, title, children, onClose, accent = "red" }: { ey
 
 function HomeView({ goTo, displayName, avatar }: { goTo: (view: ViewId) => void; displayName: string; avatar: AvatarKey }) {
   return <main className="home-page">
-    <section className="hero shell">
-      <div className="hero-copy">
-        <span className="version-pill"><span className="status-dot" /> Paper-Fu field desk / active</span>
-        <p className="kicker">A tabletop sport, carefully laminated.</p>
-        <h1>Pick your fight.<br /><em>File your legend.</em></h1>
-        <p className="hero-lede">Paper-Fu is a fixed-pack deckbuilder with more than one way to make a mess: duel a rival, trade places with a team, or leave room for the boss that is currently being measured for a bigger chair.</p>
-        <div className="hero-actions"><button className="button primary desktop-play-cta" onClick={() => goTo("playtest")}>Play Quick Duel <span>→</span></button><button className="button ghost" onClick={() => goTo("quickstart")}>Open the mode docket</button></div>
-        <div className="hero-note"><span className="hero-agent-greeting"><img src={AVATAR_IMAGES[avatar]} alt="" /> Welcome back, <strong>{displayName || "Paper-Fu Agent"}</strong>.</span><strong>4 official formats</strong> · {cardData.total} filed cards · {cardData.counts.Character} fighters on record</div>
+    <section className="dispatch-hero shell" aria-labelledby="dispatch-title">
+      <div className="dispatch-copy">
+        <div className="dispatch-ticket"><span className="status-dot" /> DEPARTMENT OF QUESTIONABLY REGULATED MARTIAL ARTS <b>FIELD DISPATCH / 01</b></div>
+        <p className="dispatch-welcome"><img src={AVATAR_IMAGES[avatar]} alt="" /> Welcome back, <strong>{displayName || "Paper-Fu Agent"}</strong>. Your appointment with chaos is ready.</p>
+        <h1 id="dispatch-title">SHUFFLE.<br />STRIKE.<br /><em>HIYAH!</em></h1>
+        <p className="dispatch-lede">Build a deck, pick a fight, and earn your belt in a world where the paperwork hits back.</p>
+        <div className="dispatch-actions"><button className="button primary desktop-play-cta" onClick={() => goTo("playtest")}>ENTER QUICK DUEL <span>↗</span></button><button className="button ghost" onClick={() => goTo("quickstart")}>LEARN THE GAME <span>→</span></button></div>
+        <div className="dispatch-credentials"><span><b>15</b> CARD STARTER</span><span><b>03</b> STRIKE ZONES</span><span><b>{cardData.counts.Character}</b> FIGHTERS</span></div>
       </div>
-      <div className="hero-art-new"><div className="hero-paper-card"><span className="paper-shadow shadow-one" /><span className="paper-shadow shadow-two" /><i className="fastener tape-strip hero-tape-one" aria-hidden="true" /><i className="fastener tape-strip hero-tape-two" aria-hidden="true" /><span className="hero-paper-label">FORM 07 · LICENSED CHAOS</span><img src={heroPaperFuUrl} alt="Paper-Fu fighters and a city inspector at the annual licensing tournament" fetchPriority="high" decoding="async" /><div className="hero-paper-caption"><span>PAPER-FU / FIELD EVIDENCE</span><strong>THE MAT IS A DESK</strong></div><div className="impact-word" aria-hidden="true">HIYAH!</div></div><div className="hero-art-note"><b>Cleared for yelling</b><small>Filed by the Department of Competitive Safety. Stamped twice for confidence.</small></div></div>
+      <div className="dispatch-visual" aria-label="Paper-Fu tournament illustration">
+        <div className="dispatch-art-paper"><span className="dispatch-art-label">OFFICIAL FIELD EVIDENCE <b>NO. 001</b></span><img src={heroPaperFuUrl} alt="Paper-Fu fighters and a city inspector at the annual licensing tournament" fetchPriority="high" decoding="async" /><span className="dispatch-art-caption">A PERFECTLY NORMAL DAY AT THE DOJO <b>↗</b></span></div>
+        <div className="dispatch-stamp" aria-hidden="true"><span>OFFICIALLY</span><strong>READY</strong><small>TO RUMBLE</small></div>
+        <div className="dispatch-card-stack" aria-hidden="true"><img src={highGuardArtUrl} alt="" /><img src={starterJabArtUrl} alt="" /></div>
+        <span className="dispatch-visual-note">A DECKBUILDER WITH BIG HIYAH ENERGY.</span>
+      </div>
     </section>
+    <div className="dispatch-ticker" aria-hidden="true"><span>FIGHT FAIR</span><i>✦</i><span>FILE EVERYTHING</span><i>✦</i><span>EXPECT THE UNEXPECTED</span><i>✦</i><span>THE CARD WINS</span><i>✦</i><span>FIGHT FAIR</span></div>
     <section className="stats-strip" aria-label="Paper-Fu operating facts"><div className="shell stats-inner"><div><strong>04</strong><span>Official game formats</span></div><div><strong>15</strong><span>Cards in the opening packet</span></div><div><strong>03</strong><span>Combat zones to declare</span></div><div><strong>∞</strong><span>Ways to cite a technicality</span></div></div></section>
     <section className="shell home-command-section" aria-labelledby="mode-docket-title">
       <div className="home-section-heading"><div><span className="eyebrow">01 / Choose your docket</span><h2 id="mode-docket-title">Four ways to put the paperwork in danger.</h2></div><p>The rules already know how these formats work. The field desk is expanding to give every one of them a proper place to land.</p></div>

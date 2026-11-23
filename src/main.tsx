@@ -5,6 +5,7 @@ import CompanionApp from "../app/companion-app";
 import PlaytestCardRouteLifecycle from "../app/playtest-card-route-lifecycle";
 import "../app/card-inspector.css";
 import "../app/playtest.css";
+import "../app/field-redesign.css";
 import { applyThemeToDocument, readInitialTheme, readUserPreferences } from "../app/user-preferences";
 
 const initialPreferences = readUserPreferences();
