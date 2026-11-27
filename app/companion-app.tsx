@@ -489,10 +489,30 @@ function QuickStartView({ goTo }: { goTo: (view: ViewId) => void }) {
   </main>;
 }
 
+function ruleSearchExcerpt(blocks: RuleBlock[], query: string) {
+  const text = blocks.map((block) => block.kind === "table" ? block.rows.map((row) => row.join(" ")).join(" ") : block.text).join(" ").replace(/\s+/g, " ").trim();
+  const matchAt = text.toLocaleLowerCase().indexOf(query.trim().toLocaleLowerCase());
+  const start = Math.max(0, matchAt < 0 ? 0 : matchAt - 58);
+  const end = Math.min(text.length, start + 170);
+  return `${start > 0 ? "… " : ""}${text.slice(start, end)}${end < text.length ? " …" : ""}`;
+}
+
 function RulesView({ initialChapterId = "", initialSectionId = "" }: { initialChapterId?: string; initialSectionId?: string }) {
   const [selectedId, setSelectedId] = useState(() => ruleChapters.some((chapter) => chapter.id === initialChapterId) ? initialChapterId : ruleChapters[0]?.id ?? "");
   const [query, setQuery] = useState("");
   const [activeSectionId, setActiveSectionId] = useState(initialSectionId);
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+      if (event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey || isTyping) return;
+      event.preventDefault();
+      document.querySelector<HTMLInputElement>(".rules-toolbar input")?.focus();
+    };
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
+  }, []);
+
   useEffect(() => {
     setSelectedId(ruleChapters.some((chapter) => chapter.id === initialChapterId) ? initialChapterId : ruleChapters[0]?.id ?? "");
   }, [initialChapterId]);
@@ -543,9 +563,9 @@ function RulesView({ initialChapterId = "", initialSectionId = "" }: { initialCh
   };
   return <main className="rules-page shell page-shell">
     <SectionHeader eyebrow="Official game guide" title="Full rules." intro="Find a chapter, search a term, and get back to the table." art={headerRulesUrl} />
-        <div className="rules-toolbar"><label className="search-box large"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all rules—Flow, Tempo, KO, Combo…" aria-label="Search all rules" />{query && <button onClick={() => setQuery("")} aria-label="Clear rules search">×</button>}</label><span className="source-badge">{ruleChapters.length} focused chapters · filed for table use</span></div>
+        <div className="rules-toolbar"><label className="search-box large"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all rules—Flow, Tempo, KO, Combo…" aria-label="Search all rules" aria-keyshortcuts="/" />{query && <button onClick={() => setQuery("")} aria-label="Clear rules search">×</button>}</label><span className="source-badge">{ruleChapters.length} focused chapters · press / to search</span></div>
     <label className="mobile-chapter-picker"><span>Jump to a chapter</span><select value={selected.id} onChange={(event) => chooseChapter(event.target.value)}>{ruleChapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{displayRuleNumber(chapter)} · {chapter.title}</option>)}</select></label>
-    {query ? <section className="rule-search-results" aria-live="polite"><h2>{matches.length} matching section{matches.length === 1 ? "" : "s"}</h2>{matches.length ? matches.map(({ chapter, section }) => <button key={`${chapter.id}-${section?.id ?? "overview"}`} onClick={() => chooseSearchResult(chapter.id, section?.id)}><span>Chapter {displayRuleNumber(chapter)} · {chapter.title}</span><h3>{section?.title ?? "Chapter overview"}</h3><p>Open this match</p></button>) : <div className="empty-state"><strong>No rule found.</strong><p>Try a shorter term or search the Card Library for printed card text.</p></div>}</section> :
+    {query ? <section className="rule-search-results" aria-live="polite"><h2>{matches.length} matching section{matches.length === 1 ? "" : "s"}</h2>{matches.length ? matches.map(({ chapter, section }) => <button key={`${chapter.id}-${section?.id ?? "overview"}`} onClick={() => chooseSearchResult(chapter.id, section?.id)}><span>Chapter {displayRuleNumber(chapter)} · {chapter.title}</span><h3>{section?.title ?? "Chapter overview"}</h3><p>{ruleSearchExcerpt(section?.content ?? chapter.intro, query)}</p></button>) : <div className="empty-state"><strong>No rule found.</strong><p>Try a shorter term or search the Card Library for printed card text.</p></div>}</section> :
       <div className="rules-layout" id="rule-reader"><aside className="chapter-nav" aria-label="Rule chapters"><span>Contents</span>{ruleChapters.map((chapter) => <button aria-current={chapter.id === selected.id ? "page" : undefined} className={chapter.id === selected.id ? "active" : ""} onClick={() => chooseChapter(chapter.id)} key={chapter.id}><b>{displayRuleNumber(chapter)}</b><span>{chapter.title}</span></button>)}{selected.sections.length > 0 && <nav className="chapter-subsection-nav" aria-label={`${selected.title} sections`}><span>In this chapter</span>{selected.sections.map((section) => <button type="button" aria-current={activeSectionId === section.id ? "location" : undefined} className={activeSectionId === section.id ? "active" : ""} onClick={() => chooseSection(section.id)} key={section.id}>{section.title}</button>)}</nav>}</aside><article className="rule-article paper-stack"><header><span>Chapter {displayRuleNumber(selected)}</span><h1>{selected.title}</h1></header>{selected.sections.length > 0 && <details className="rule-section-picker"><summary>Sections in this chapter</summary><nav className="rule-section-nav" aria-label={`${selected.title} sections`}>{selected.sections.map((section) => <button type="button" aria-current={activeSectionId === section.id ? "location" : undefined} className={activeSectionId === section.id ? "active" : ""} onClick={() => chooseSection(section.id)} key={section.id}>{section.title}</button>)}</nav></details>}<RuleBlocks blocks={selected.intro} />{selected.sections.map((section) => <section id={section.id} key={section.id}><h2>{section.title}</h2><RuleBlocks blocks={section.content} /></section>)}<footer className="chapter-footer"><span>End of Chapter {displayRuleNumber(selected)}</span>{ruleChapters[selectedIndex + 1] && <button onClick={() => chooseChapter(ruleChapters[selectedIndex + 1].id)}>Next: {ruleChapters[selectedIndex + 1].title} →</button>}</footer></article></div>}
   </main>;
 }
