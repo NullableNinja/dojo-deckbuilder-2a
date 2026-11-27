@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import cardEffectsJson from "./data/card-effects.json";
 
@@ -344,6 +344,17 @@ function CardInspectorContent({
   onClose,
 }: CardInspectorProps) {
   const dialogRef = useInspectorDialog(onClose);
+  const [shareStatus, setShareStatus] = useState("Copy dossier link");
+  const copyDossierLink = async () => {
+    const cardUrl = new URL(window.location.href);
+    cardUrl.hash = `cards/${encodeURIComponent(card.catalogId)}`;
+    try {
+      await navigator.clipboard.writeText(cardUrl.toString());
+      setShareStatus("Dossier link copied");
+    } catch {
+      setShareStatus("Copy unavailable");
+    }
+  };
   const resolvedEffectEntry = effectEntry ?? effectRegistry.cards?.[card.catalogId];
   const resolvedEffectRevision = effectRevision ?? effectRegistry.rulesRevision ?? effectRegistry.rulesVersion;
   const statPairs = Object.entries(card.stats ?? {});
@@ -373,6 +384,7 @@ function CardInspectorContent({
             <button type="button" className={`card-inspector-star${saved ? " is-saved" : ""}`} aria-pressed={saved} aria-label={saved ? `Remove ${card.name} from Dojo Binder` : `Add ${card.name} to Dojo Binder`} title={saved ? "Remove from Dojo Binder" : "Add to Dojo Binder"} onClick={onToggleSaved}>{saved ? "★" : "☆"}</button>
           </div>
           <p>Click the star to {saved ? "remove this card from" : "save this card to"} your Dojo Binder.</p>
+          <button type="button" className="card-inspector-share" onClick={copyDossierLink}>{shareStatus}<span aria-hidden="true"> ↗</span></button>
         </section>
 
         <section className="card-inspector-details">
