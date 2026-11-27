@@ -1,0 +1,17 @@
+.table-setup-desk { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(260px,1fr); gap:clamp(16px,3vw,40px); padding:clamp(16px,3vw,34px); background:var(--pf-surface-dim); border:1px solid var(--pf-line-strong); }
+.table-setup-sheet { align-self:start; padding:clamp(16px,3vw,30px); color:var(--pf-ink); background:var(--pf-surface-raised); border:1px solid var(--pf-line); box-shadow:4px 5px 0 var(--pf-line); }
+.table-setup-sheet h3 { font-size:clamp(26px,3vw,44px); line-height:1.05; margin:.6em 0 .4em; }
+.table-setup-sheet p { line-height:1.55; margin:.5em 0 1.4em; }
+.table-setup-mat { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; padding:clamp(12px,2vw,26px); color:var(--pf-ink-soft); background:repeating-linear-gradient(90deg,transparent 0 23px,var(--pf-line) 24px 24.5px),var(--pf-surface); border:1px solid var(--pf-line-strong); }
+.table-setup-mat strong { grid-column:1/-1; margin-bottom:8px; font:700 12px var(--pf-mono); }
+.table-setup-mat i { display:block; aspect-ratio:2/3; background:var(--pf-surface-raised); border:1px solid var(--pf-line-strong); box-shadow:2px 2px 0 var(--pf-line); border-radius:3px; }
+.table-setup-mat i::after { content:""; display:block; margin:15%; height:65%; border:1px solid var(--pf-line); background:repeating-linear-gradient(135deg,transparent 0 4px,var(--pf-line) 4px 5px); }
+.table-setup-mat.is-ready i { border-top:4px solid var(--pf-action); }
+.table-setup-checks { display:grid; align-content:start; gap:4px; }
+.table-setup-checks > button { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px; min-height:44px; padding:8px 12px; color:var(--pf-ink); background:var(--pf-surface-raised); border:1px solid var(--pf-line); text-align:left; cursor:pointer; font:inherit; }
+.table-setup-checks > button[aria-current="step"] { box-shadow:inset 4px 0 var(--pf-action); border-color:var(--pf-line-strong); font-weight:700; }
+.table-setup-checks small { font-family:var(--pf-mono); }
+.table-setup-desk button:focus-visible { outline:3px solid var(--pf-action); outline-offset:2px; }
+.table-setup-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.table-setup-controls button { min-height:44px; }
+@media(max-width:720px) { .table-setup-desk { grid-template-columns:1fr; } }
