@@ -394,6 +394,7 @@ function HomeView({ goTo, displayName, avatar }: { goTo: (view: ViewId) => void;
         <h1 id="dispatch-title">SHUFFLE.<br />STRIKE.<br /><em>HIYAH!</em></h1>
         <p className="dispatch-lede">Build a deck, pick a fight, and earn your belt in a world where the paperwork hits back.</p>
         <div className="dispatch-actions"><button className="button primary desktop-play-cta" onClick={() => goTo("playtest")}>ENTER QUICK DUEL <span>↗</span></button><button className="button ghost" onClick={() => goTo("quickstart")}>LEARN THE GAME <span>→</span></button></div>
+        <button type="button" className="dispatch-archive-link" onClick={() => goTo("cards")}><span>Explore the card archive</span><b>{cardData.total} FILES ↗</b></button>
         <div className="dispatch-credentials"><span><b>15</b> CARD STARTER</span><span><b>03</b> STRIKE ZONES</span><span><b>{cardData.counts.Character}</b> FIGHTERS</span></div>
       </div>
       <div className="dispatch-visual" aria-label="Paper-Fu tournament illustration">
