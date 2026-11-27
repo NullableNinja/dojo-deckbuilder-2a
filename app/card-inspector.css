@@ -806,3 +806,15 @@ body:has(.universal-card-inspector-backdrop) {
 @media (prefers-reduced-motion: reduce) {
   .card-inspector-loading > span { animation: none; }
 }
+
+.card-inspector-card-wrap > img {
+  animation: dossier-card-arrive 340ms cubic-bezier(.2,.75,.25,1) both;
+}
+@keyframes dossier-card-arrive {
+  from { opacity: 0; transform: translateY(12px) rotate(-1deg) scale(.97); }
+  to { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-inspector-card-wrap > img { animation: none; }
+}
+:root[data-motion="reduced"] .card-inspector-card-wrap > img { animation: none; }

@@ -380,7 +380,7 @@ function CardInspectorContent({
       <div className="card-inspector-layout">
         <section className="card-inspector-card-stage" aria-label={`${card.name} card image`}>
           <div className="card-inspector-card-wrap">
-            <img src={imageUrl} alt={card.name} decoding="async" />
+            <img key={card.catalogId} src={imageUrl} alt={card.name} decoding="async" />
             <button type="button" className={`card-inspector-star${saved ? " is-saved" : ""}`} aria-pressed={saved} aria-label={saved ? `Remove ${card.name} from Dojo Binder` : `Add ${card.name} to Dojo Binder`} title={saved ? "Remove from Dojo Binder" : "Add to Dojo Binder"} onClick={onToggleSaved}>{saved ? "★" : "☆"}</button>
           </div>
           <p>Click the star to {saved ? "remove this card from" : "save this card to"} your Dojo Binder.</p>
