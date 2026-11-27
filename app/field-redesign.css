@@ -128,3 +128,39 @@
   .playtest-shell--live .ascend-featured-combo-copy p b { display: block; margin-bottom: 4px; color: var(--pf-violet); font-size: 10px; letter-spacing: .06em; }
 }
 @media (prefers-reduced-motion: reduce) { .home-mode-card { transition: none; }.home-mode-card:hover,.home-mode-card:focus-visible { transform: none; } }
+
+
+/* Card archive discovery controls: tactile, quiet, and theme-token driven. */
+@layer components {
+  .library-result-actions { display: inline-flex; align-items: center; gap: 10px; }
+  .library-shuffle {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    border: 1px solid var(--pf-line-strong);
+    padding: 7px 12px;
+    color: var(--pf-ink);
+    background: var(--pf-surface-raised);
+    box-shadow: 3px 3px 0 var(--pf-line);
+    font: 800 10px/1 var(--pf-mono);
+    cursor: pointer;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  }
+  .library-shuffle > span:first-child { color: var(--pf-action); font-size: 17px; }
+  .library-shuffle small { color: var(--pf-muted); font-size: 8px; font-weight: 600; }
+  .library-shuffle:hover:not(:disabled) { transform: translate(-1px, -1px); border-color: var(--pf-action); box-shadow: 4px 4px 0 var(--pf-action); }
+  .library-shuffle:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--pf-action); }
+  .library-shuffle:focus-visible { outline: 3px solid var(--pf-action); outline-offset: 3px; }
+  .library-shuffle:disabled { opacity: .55; cursor: not-allowed; }
+  .binder-empty-state { max-width: 620px; margin-inline: auto; padding: clamp(28px, 5vw, 52px); }
+  @media (max-width: 640px) {
+    .result-line { align-items: flex-start; flex-wrap: wrap; }
+    .library-result-actions { width: 100%; justify-content: space-between; }
+    .library-shuffle { flex: 1; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .library-shuffle { transition: none; }
+    .library-shuffle:hover:not(:disabled), .library-shuffle:active:not(:disabled) { transform: none; }
+  }
+}
