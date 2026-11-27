@@ -1,0 +1,16 @@
+.training-foldout{margin:1.5rem 0 2rem;background:var(--pf-surface-raised);border:1px solid var(--pf-line-strong);border-top:5px solid var(--pf-action);box-shadow:4px 5px 0 var(--pf-line);color:var(--pf-ink)}
+.training-foldout header,.training-foldout footer,.training-topics,.training-index{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.training-foldout header,.training-foldout footer{padding:1rem clamp(1rem,3vw,2rem);justify-content:space-between}
+.training-foldout h2,.training-foldout h3,.training-foldout p{margin:0}
+.training-foldout h2{font:700 clamp(1.6rem,3vw,2.3rem)/1.05 "Barlow Condensed",sans-serif}
+.training-foldout button,.training-foldout a{min-height:44px;display:inline-flex;align-items:center;justify-content:center;padding:.45rem .85rem;border:1px solid var(--pf-line-strong);background:var(--pf-surface-raised);color:var(--pf-ink);font-family:inherit;font-weight:700;font-size:.83rem;cursor:pointer}
+.training-foldout button[aria-pressed=true],.training-foldout button[aria-current=step]{outline:2px solid var(--pf-action);outline-offset:-2px;font-weight:800}
+.training-foldout :is(a,button):focus-visible{outline:3px solid var(--pf-action);outline-offset:3px}
+.training-foldout button:disabled{opacity:.5;cursor:default}
+.training-stage{display:grid;grid-template-columns:minmax(120px,.4fr) minmax(0,1.6fr);border-block:1px solid var(--pf-line-strong)}
+.training-glyph{display:grid;place-items:center;align-content:center;gap:.25rem;min-height:145px;color:var(--pf-ink);background:repeating-linear-gradient(135deg,transparent 0 9px,var(--pf-line) 9px 10px),var(--pf-surface-dim);border-right:1px dashed var(--pf-line-strong)}
+.training-glyph b{padding:.18em .36em;background:var(--pf-surface-raised);border:2px solid var(--pf-ink);box-shadow:5px 5px 0 var(--pf-action);transform:rotate(-4deg);font:700 clamp(3rem,5vw,6rem)/1 "Barlow Condensed",sans-serif}
+.training-script{padding:clamp(1rem,3vw,2rem);align-self:center}.training-script small{font:700 .75rem var(--pf-mono);color:var(--pf-ink-soft)}
+.training-script h3{font:700 clamp(1.5rem,3vw,2.4rem)/1.1 "Barlow Condensed",sans-serif;margin:.4rem 0}.training-script p{max-width:64ch}
+.training-index{padding:1rem clamp(1rem,3vw,2rem) 0;gap:.4rem}.training-index button{min-width:44px;padding:.5rem}.training-foldout footer a{border:0;text-decoration:underline;text-underline-offset:3px}.training-foldout footer div{display:flex;gap:.4rem}
+@media(max-width:600px){.training-stage{grid-template-columns:62px 1fr}.training-glyph b{font-size:2.3rem;box-shadow:3px 3px 0 var(--pf-action)}.training-index{gap:.25rem}.training-index button{flex:1}.training-foldout footer{align-items:start}.training-foldout footer a{padding-inline:0}}
